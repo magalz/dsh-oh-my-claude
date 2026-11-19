@@ -2,6 +2,7 @@
 // body of a skill the CLI lists) are left out by default and kept when the CLI no longer adds them.
 import { strict as assert } from "node:assert";
 import { COMMAND_CATALOG } from "../dsh.js";
+import { instructionCopiesFor, instructionDropsFor } from "./instruction-files.js";
 import { buildPrompt, contextSizes, promptTextOf, type LooseMessage } from "./prompt.js";
 import { stepContextFor } from "./turn.js";
 
@@ -49,5 +50,29 @@ const later: LooseMessage[] = [
 ];
 assert.ok(stepContextFor(later, new Set(), new Set(), none).includes("review body"));
 assert.equal(stepContextFor(later), "");
+
+// `instructionFiles: "dsh"`: Claude Code loads none of its own files, so dsh's bundle goes out
+// whole; in the default mode with the master switch on it goes out without the CLAUDE.md sections
+// Claude Code loaded itself.
+{
+  const dshCopies = instructionCopiesFor(true, false, false);
+  const dshPrompt = buildPrompt(
+    [bundle],
+    instructionDropsFor({ dshContextOn: true }, true),
+    2000,
+    dshCopies,
+  );
+  assert.ok(dshPrompt.includes("claude rules"), "dsh: the CLAUDE.md section stays");
+  assert.ok(dshPrompt.includes("agent rules"), "dsh: the AGENTS.md section stays");
+  const claudeCopies = instructionCopiesFor(false, false, false);
+  const claudePrompt = buildPrompt(
+    [bundle],
+    instructionDropsFor({ dshContextOn: true }, false),
+    2000,
+    claudeCopies,
+  );
+  assert.ok(!claudePrompt.includes("claude rules"), "default: Claude Code loads it itself");
+  assert.ok(claudePrompt.includes("agent rules"));
+}
 
 console.log("native-copies: ok");
