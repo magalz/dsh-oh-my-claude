@@ -7657,7 +7657,8 @@ export class ClaudeCodeAdapter extends LlmAdapter {
         undefined,
         undefined,
         await this.boxRouted(),
-        this.config.isolate,
+        // The prepared turn's own decision, not the mount's: engine mode can isolate one preset.
+        prepared.isolate === true,
         prepared.instructionEnv,
       ),
       onExit: () => {},

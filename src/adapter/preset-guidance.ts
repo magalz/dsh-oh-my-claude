@@ -6,8 +6,10 @@ import { readFile } from "node:fs/promises";
 import { errorText } from "../process.js";
 
 /** The largest guidance file used, in bytes. A system prompt is not an essay, and an accidentally
- *  named log or source file would otherwise be sent to the model on every turn. */
-export const PRESET_GUIDANCE_MAX_BYTES = 32 * 1024;
+ *  named log or source file would otherwise be sent to the model on every turn. The text travels on
+ *  the command line (`--append-system-prompt`), and Windows refuses a command line over 32,767
+ *  characters: the limit leaves room for the tool guidance and the other arguments. */
+export const PRESET_GUIDANCE_MAX_BYTES = 16 * 1024;
 
 /**
  * The guidance file a session under `preset` names in the config, or undefined when it has no

@@ -39,7 +39,7 @@ const dir = tempDir("omc-preset-guidance-");
   const file = join(dir, "at-the-limit.md");
   await writeFile(file, "y".repeat(PRESET_GUIDANCE_MAX_BYTES), "utf8");
   const read = await readGuidanceFile(file);
-  if (!read.ok) assert.fail(`a 32 KiB file should read: ${read.problem}`);
+  if (!read.ok) assert.fail(`a file at the limit should read: ${read.problem}`);
   assert.equal(read.text.length, PRESET_GUIDANCE_MAX_BYTES);
 }
 
@@ -63,7 +63,7 @@ const dir = tempDir("omc-preset-guidance-");
   const big = join(dir, "big.md");
   await writeFile(big, "x".repeat(PRESET_GUIDANCE_MAX_BYTES + 1), "utf8");
   const oversized = await readGuidanceFile(big);
-  if (oversized.ok) assert.fail("a file over 32 KiB contributes nothing");
+  if (oversized.ok) assert.fail("a file over the limit contributes nothing");
 }
 
 // The process key: two texts key different processes, the same text keys the same one, no
