@@ -47,6 +47,7 @@ import {
 } from "./instruction-files.js";
 import { ISOLATED_ENV, engineConfigFor, engineDigest } from "./isolate.js";
 import { engineOverlay, presetOfSession, registerEnginePresets } from "./engine-mode.js";
+import { memoryIndexBlock, readMemoryIndex, usesMemoryIndex } from "./memory-index.js";
 import { guidancePathFor, readGuidanceFile, systemPromptDigest } from "./preset-guidance.js";
 import {
   type ClaudeEvent,
@@ -178,6 +179,7 @@ import {
   alreadyShown,
 } from "../transcript.js";
 import { copyToAt, homeAt, readFromAt, sizeAt, type FsBox } from "../remote-fs.js";
+import { repoRoot } from "../repo.js";
 import {
   READY as READY_MARK,
   asHoldRecord,
@@ -469,6 +471,9 @@ export class ClaudeCodeAdapter extends LlmAdapter {
   /** Guidance files already reported unusable, so a missing or oversized file logs once per path
    *  and not every turn. */
   guidanceWarned = new Set<string>();
+  /** Auto-memory indexes already reported unreadable, so a bad file logs once per path and not every
+   *  turn. */
+  memoryWarned = new Set<string>();
   sessionController?: SessionController;
   /** Ids of the drain notices (`WAKE_TEXT`, `RECONNECT_TEXT`) still waiting in a session's inbox. Ids
    *  only: the agent is looked up when they are taken back, so an entry never keeps a session's
@@ -1672,6 +1677,23 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     return undefined;
   }
 
+  /** The block appending the workspace's auto-memory index, or undefined when the index contributes
+   *  nothing. A missing or empty index is the normal "no memory yet" case and logs nothing; any
+   *  other read problem is logged once per path, and the turn goes on without the index. */
+  private async memoryIndexAt(dir: string): Promise<string | undefined> {
+    const path = join(dir, "MEMORY.md");
+    const read = await readMemoryIndex(dir);
+    if (read.ok) return memoryIndexBlock(path, read.text);
+    if (read.problem !== undefined && !this.memoryWarned.has(path)) {
+      this.memoryWarned.add(path);
+      this.log(
+        "warn",
+        `auto-memory index ${path} not used: ${read.problem}; continuing without it`,
+      );
+    }
+    return undefined;
+  }
+
   /** Everything one turn needs: spawn args + spec for the long-lived process, and the stdin line for this turn. */
   // SAFETY: options shape from dsh LlmAdapter.generate() contract
   async prepare(
@@ -1784,6 +1806,30 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     // bundle whole. Local turns only: the variable cannot be handed to a box's claude, and a side
     // call carries no conversation to instruct, so both keep the default arrangement.
     const dshInstructions = usesDshInstructions(cfg, targetHost, options.purpose);
+    // Claude Code's loading-off mode takes its auto-memory index with it, so with the key on dsh
+    // reads MEMORY.md itself and appends it beside the preset guidance. The directory is the
+    // repository's project dir under claudeHome; a custom `autoMemoryDirectory` is not followed
+    // (docs/configuration.md). Every problem means no block, never a failed turn.
+    let memoryText: string | undefined;
+    if (usesMemoryIndex(cfg, dshInstructions, engineConfig.isolate, dshSystem)) {
+      try {
+        const root = await repoRoot({}, cwd);
+        memoryText = await this.memoryIndexAt(
+          join(this.claudeHome, "projects", projectDirName(root), "memory"),
+        );
+      } catch (error) {
+        if (!this.memoryWarned.has(cwd)) {
+          this.memoryWarned.add(cwd);
+          this.log(
+            "warn",
+            `auto-memory index for ${cwd} not used: ${errorText(error)}; continuing without it`,
+          );
+        }
+      }
+    }
+    // The index rides with the preset guidance in `--append-system-prompt`; without either, the
+    // argument stays undefined so those sessions key exactly as before.
+    const presetGuidance = [presetText, memoryText].filter(Boolean).join("\n\n") || undefined;
     // With Claude Code loading none of its own files, dsh's copy is not a duplicate: the block is
     // forwarded whatever the switches say. The skills block keeps following them.
     const drops = instructionDropsFor(hints, dshInstructions);
@@ -1871,7 +1917,7 @@ export class ClaudeCodeAdapter extends LlmAdapter {
       permissionMode: effectivePermissionMode,
       mcp: mcpBridge,
       dshSystem,
-      presetGuidance: presetText,
+      presetGuidance,
     });
     // Spec = what a running process was spawned with. `resuming` is deliberately left out: it flips
     // to true after the first turn and must not force a respawn.
@@ -1886,7 +1932,9 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     // A process keeps the prompt it was started with, so a changed one has to key a new process.
     // Hashed: the spec is saved beside a keeper, and the prompt has no business on disk there.
     // The digest covers dsh's prompt in that mode and the preset guidance in the default mode; it
-    // is undefined when neither is sent, so those sessions key exactly as they did before.
+    // is undefined when neither is sent, so those sessions key exactly as they did before. The
+    // memory index is deliberately left out: Claude Code reads its index once per session, so saving
+    // a memory must not restart the process; the new text arrives when it next starts.
     const systemDigest = systemPromptDigest(dshSystem, presetText);
     if (systemDigest !== undefined) spec.system = systemDigest;
     if (cfg.followToolSet && mcpBridge?.tools) spec.tools = toolSetDigest(mcpBridge.tools);

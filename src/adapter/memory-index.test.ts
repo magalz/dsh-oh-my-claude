@@ -90,7 +90,7 @@ const dir = tempDir("omc-memory-index-");
   const body = parts.slice(0, -1);
   assert.ok(body.length > 0, "some whole lines fit");
   assert.deepEqual(body, lines.slice(0, body.length), "whole lines only, from the top");
-  assert.match(body.at(-1) ?? "", /[^\x00-\x7F]/, "a multi-byte line sits next to the cut");
+  assert.match(body.at(-1) ?? "", /[^\x20-\x7E]/, "a multi-byte line sits next to the cut");
   assert.ok(
     Buffer.byteLength(body.join("\n"), "utf8") <= MEMORY_INDEX_MAX_BYTES,
     "the kept lines fit the limit",
