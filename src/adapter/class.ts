@@ -46,6 +46,7 @@ import { MCP_PATH, type McpBridge } from "../mcp.js";
 import { KEY_ENV } from "../mcp-config.js";
 import { ISOLATED_ENV, engineConfigFor, engineDigest } from "./isolate.js";
 import { engineOverlay, presetOfSession } from "./engine-mode.js";
+import { guidancePathFor, readGuidanceFile, systemPromptDigest } from "./preset-guidance.js";
 import {
   type ClaudeEvent,
   ClaudeProcess,
@@ -463,6 +464,9 @@ export class ClaudeCodeAdapter extends LlmAdapter {
   loggedVersion = false;
   /** Probe targets already written to resume.log, so the line lands once per binary, not per turn. */
   probeTraced = new Set<string>();
+  /** Guidance files already reported unusable, so a missing or oversized file logs once per path
+   *  and not every turn. */
+  guidanceWarned = new Set<string>();
   sessionController?: SessionController;
   /** Ids of the drain notices (`WAKE_TEXT`, `RECONNECT_TEXT`) still waiting in a session's inbox. Ids
    *  only: the agent is looked up when they are taken back, so an entry never keeps a session's
@@ -1650,6 +1654,19 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     else this.log("info", `claude session ${id} refused a reply; its transcript was moved aside`);
   }
 
+  /** The text the guidance file at `path` holds, or undefined when it contributes nothing. A
+   *  missing, unreadable, empty or oversized file is logged once per path, and the turn goes on
+   *  without it. */
+  private async guidanceAt(path: string): Promise<string | undefined> {
+    const read = await readGuidanceFile(path);
+    if (read.ok) return read.text;
+    if (!this.guidanceWarned.has(path)) {
+      this.guidanceWarned.add(path);
+      this.log("warn", `preset guidance ${path} not used: ${read.problem}; continuing without it`);
+    }
+    return undefined;
+  }
+
   /** Everything one turn needs: spawn args + spec for the long-lived process, and the stdin line for this turn. */
   // SAFETY: options shape from dsh LlmAdapter.generate() contract
   async prepare(
@@ -1744,6 +1761,16 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     const dshMode = cfg.systemPrompt === "dsh" && !options.purpose;
     // Under `systemPrompt: dsh` the prompt dsh wrote replaces Claude Code's (`buildArgs`).
     const dshSystem = dshMode ? dshSystemPrompt(options.messages, options.system) : undefined;
+    // Preset guidance: the file this session's dsh agent preset names in the config, appended to
+    // Claude Code's prompt in the default mode. dsh's prompt replaces Claude Code's and already
+    // carries the preset, so nothing is read then. One read per turn; a file that cannot be used
+    // contributes nothing and is reported once per path.
+    const preset =
+      options.purpose || dshMode || options.sessionId === undefined
+        ? null
+        : presetOfSession(this.ctx, options.sessionId);
+    const guidancePath = guidancePathFor(cfg, preset);
+    const presetText = guidancePath === undefined ? undefined : await this.guidanceAt(guidancePath);
     // `isolate` covers local spawns only: its environment (no CLAUDE.md, no telemetry) goes into
     // the local child's env, and a box's claude keeps its own settings and CLAUDE.md, so neither
     // its flags nor the CLAUDE.md copy apply there. Mixed, a box's CLI read its CLAUDE.md while
@@ -1832,6 +1859,7 @@ export class ClaudeCodeAdapter extends LlmAdapter {
       permissionMode: effectivePermissionMode,
       mcp: mcpBridge,
       dshSystem,
+      presetGuidance: presetText,
     });
     // Spec = what a running process was spawned with. `resuming` is deliberately left out: it flips
     // to true after the first turn and must not force a respawn.
@@ -1845,8 +1873,10 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     };
     // A process keeps the prompt it was started with, so a changed one has to key a new process.
     // Hashed: the spec is saved beside a keeper, and the prompt has no business on disk there.
-    if (dshSystem !== undefined)
-      spec.system = createHash("sha256").update(dshSystem).digest("hex").slice(0, 16);
+    // The digest covers dsh's prompt in that mode and the preset guidance in the default mode; it
+    // is undefined when neither is sent, so those sessions key exactly as they did before.
+    const systemDigest = systemPromptDigest(dshSystem, presetText);
+    if (systemDigest !== undefined) spec.system = systemDigest;
     if (cfg.followToolSet && mcpBridge?.tools) spec.tools = toolSetDigest(mcpBridge.tools);
     const engine = engineDigest(engineConfig);
     if (engine !== undefined) spec.engine = engine;

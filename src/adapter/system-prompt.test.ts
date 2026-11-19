@@ -1,8 +1,9 @@
 // `systemPrompt: dsh`: dsh's own system prompt replaces Claude Code's, the tool guidance follows
 // it, the CLI's prompt snapshot is off so a changed prompt reaches a resumed session, and dsh's
-// mid-session developer text rides in the turn. The default mode is unchanged.
+// mid-session developer text rides in the turn. The default mode appends a session preset's
+// guidance before the tool guidance, and leaves it alone under dsh's own prompt.
 import { strict as assert } from "node:assert";
-import { buildArgs } from "./cli.js";
+import { buildArgs, dshToolsGuidance } from "./cli.js";
 import { Config } from "./config.js";
 import { buildPrompt, dshSystemPrompt, selectTurns, type LooseMessage } from "./prompt.js";
 
@@ -70,6 +71,34 @@ assert.equal(valueOf(plain, "--system-prompt"), undefined, "default: Claude Code
 assert.ok(valueOf(plain, "--append-system-prompt")?.startsWith("sys\n\ndsh tools are available"));
 assert.ok(!plain.includes("--system-prompt-snapshot"));
 
+// A session preset's guidance file rides on the same flag, between the one-shot system text and
+// the tool guidance. With no guidance the appended text is exactly what it was before the key.
+const guided = buildArgs({
+  model: "m",
+  system: "sys",
+  config: new Config({}),
+  mcp: { url: "http://x", tools },
+  presetGuidance: "Preset rule.",
+});
+assert.equal(
+  valueOf(guided, "--append-system-prompt"),
+  ["sys", "Preset rule.", dshToolsGuidance(tools, ["default"])].join("\n\n"),
+);
+assert.equal(
+  valueOf(
+    buildArgs({
+      model: "m",
+      system: "sys",
+      config: new Config({}),
+      mcp: { url: "http://x", tools },
+      presetGuidance: undefined,
+    }),
+    "--append-system-prompt",
+  ),
+  ["sys", dshToolsGuidance(tools, ["default"])].join("\n\n"),
+  "no guidance: the appended text is unchanged",
+);
+
 const replaced = buildArgs({
   model: "m",
   config: new Config({ systemPrompt: "dsh" }),
@@ -79,6 +108,16 @@ const replaced = buildArgs({
 assert.ok(valueOf(replaced, "--system-prompt")?.startsWith("You are Sakina.\n\ndsh tools are"));
 assert.equal(valueOf(replaced, "--system-prompt-snapshot"), "off");
 assert.equal(valueOf(replaced, "--append-system-prompt"), undefined, "nothing appended twice");
+
+// dsh's prompt already carries the session's preset, so a guidance file changes nothing there.
+const replacedGuided = buildArgs({
+  model: "m",
+  config: new Config({ systemPrompt: "dsh" }),
+  dshSystem: "You are Sakina.",
+  mcp: { url: "http://x", tools },
+  presetGuidance: "Preset rule.",
+});
+assert.deepEqual(replacedGuided, replaced, "dsh's prompt mode ignores the preset guidance");
 
 // A CLI without the flag keeps the old path rather than dying on an unknown option.
 const old = buildArgs({
