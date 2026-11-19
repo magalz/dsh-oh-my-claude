@@ -168,6 +168,7 @@ import {
   type SpawnModeInfo,
   type SpawnSetting,
 } from "./spawn-mode.js";
+import { forkSourceOf } from "./fork-source.js";
 import { serverText } from "../locale.js";
 import {
   assistantMessageText,
@@ -1540,8 +1541,8 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     } catch {
       return false;
     }
-    const parentId = header?.parentSession;
-    if (!parentId || header?.origin === "subagent") return false;
+    const parentId = forkSourceOf(header);
+    if (!parentId) return false;
     const parentCwd = this.sessionCwd(parentId) ?? cwd;
     const parentClaude = (await claudeSessionExists(this.claudeHome, parentCwd, parentId))
       ? parentId
