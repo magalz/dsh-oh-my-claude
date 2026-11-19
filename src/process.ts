@@ -1537,6 +1537,12 @@ export interface ClaudeProcessSpec {
   /** Set when the process runs under `isolate` (the config's, or engine mode's for the session's
    *  preset): the spawner hands it isolate's environment, which is fixed at spawn like the rest. */
   isolate?: true;
+  /** The environment this process was started with for the `dsh` instruction-files mode: the one
+   *  variable that switches Claude Code's own CLAUDE.md loading off (`instruction-files.ts`).
+   *  Absent in the default mode and under `isolate`, whose environment already carries it, so
+   *  every other spec keys exactly as it did. Switching the mode changes the key, and the session's
+   *  next turn starts a process that loads dsh's instructions and not Claude Code's. */
+  instructionEnv?: Record<string, string>;
 }
 
 /** What the caller wants to know when a Claude process ends, live or after a restart. */
