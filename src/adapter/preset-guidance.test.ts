@@ -7,11 +7,23 @@ import { join } from "node:path";
 import { tempDir } from "../test-tmp.js";
 import {
   PRESET_GUIDANCE_MAX_BYTES,
+  guidancePathFor,
   readGuidanceFile,
   systemPromptDigest,
 } from "./preset-guidance.js";
 
 const dir = tempDir("omc-preset-guidance-");
+
+// The config resolves a preset to its file; no preset, an unlisted one, and a name inherited from
+// Object.prototype all resolve to nothing, which is the normal case and adds no prompt text.
+{
+  const lead = join(dir, "lead.md");
+  const config = { presetGuidance: { lead } };
+  assert.equal(guidancePathFor(config, "lead"), lead);
+  assert.equal(guidancePathFor(config, "other"), undefined);
+  assert.equal(guidancePathFor(config, null), undefined);
+  assert.equal(guidancePathFor({ presetGuidance: {} }, "toString"), undefined);
+}
 
 // A file's trimmed text is the guidance; the reason it cannot be used travels back for the log.
 {

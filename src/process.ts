@@ -1519,9 +1519,11 @@ export interface ClaudeProcessSpec {
    *  before the field existed; a flip changes the key and the session's next turn respawns, never
    *  the turn in flight. */
   child?: "node" | "dsh";
-  /** A digest of dsh's system prompt when the `dsh` system prompt mode passed it with
-   *  `--system-prompt`. Absent otherwise, so every other spec keys as before; a prompt dsh changed
-   *  changes the key, and the session's next turn starts a process that reads the new one. */
+  /** A digest of the system prompt text the process was started with: dsh's prompt when the `dsh`
+   *  system prompt mode passed it with `--system-prompt`, or the session preset's guidance file
+   *  when the default mode appended it with `--append-system-prompt`. Absent when neither is
+   *  sent, so every other spec keys as before; a changed prompt or file changes the key, and the
+   *  session's next turn starts a process that reads the new one. */
   system?: string;
   /** A digest of the bridged dsh tools (names, parameter schemas, deferral) under
    *  `followToolSet`. Claude Code lists an MCP server's tools once, at start, so a changed set

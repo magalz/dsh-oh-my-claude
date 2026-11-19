@@ -97,6 +97,9 @@ export type Config = {
   dshTools: boolean;
   refusalAsFailure: boolean;
   systemPrompt: "claude" | "dsh";
+  /** dsh agent preset id → absolute path of a UTF-8 text file whose trimmed text is appended to
+   *  Claude Code's system prompt in the default mode; unused under `systemPrompt: "dsh"`. */
+  presetGuidance: Record<string, string>;
   verbatimPrompts: boolean;
   isolate: boolean;
   replayToolTextLimit: number;
@@ -268,6 +271,12 @@ export const Config = z.object({
     .default("claude")
     .description(
       "Whose system prompt Claude reads. 'claude': Claude Code's own, with the plugin's dsh tool guidance appended; dsh's system prompt is not sent. 'dsh': dsh's system prompt replaces Claude Code's (--system-prompt, recorded fresh on every spawn), followed by the tool guidance, and dsh's mid-session system updates go into the turn as system lines, so Claude reads what a native model would. A changed dsh prompt starts a new Claude process on the session's next turn",
+    ),
+  presetGuidance: z
+    .dict(z.string())
+    .default({})
+    .description(
+      "Text appended to Claude Code's own system prompt per dsh agent preset: a map from preset id to the absolute path of a UTF-8 text file. In the default mode the file's trimmed text sits between dsh's one-shot system text and the plugin's dsh tool guidance in --append-system-prompt. Not sent under 'dsh', whose prompt already carries the preset. A missing, unreadable, empty or over-32-KiB file contributes nothing and is logged once; the turn proceeds. A changed file starts a new Claude process on the session's next turn",
     ),
   verbatimPrompts: z
     .boolean()
