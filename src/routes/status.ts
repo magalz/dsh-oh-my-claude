@@ -9,7 +9,11 @@ import { type RouteHandler, UNHANDLED } from "./context.js";
 import type { DiagnosticFile, MountBox, RouteCtx } from "../sessions.js";
 import { parseChangelog } from "../changelog.js";
 import { unknownEffortLevels } from "../adapter/catalog.js";
-import { engineSendsDshPrompt, presetOfSession } from "../adapter/engine-mode.js";
+import {
+  engineSendsDshPrompt,
+  presetOfSession,
+  registeredEnginePresets,
+} from "../adapter/engine-mode.js";
 import { errorText, shq, sshArgs } from "../process.js";
 import { buildReport, type PrivateValues, type ReportInput } from "../report.js";
 import { repairsSummary } from "../session-heal.js";
@@ -119,13 +123,17 @@ export function statusRoutes(c: RouteCtx): RouteHandler {
     }
     // Whose system prompt a session's turns send, for the chat's row mask: dsh's own "System
     // prompt" row is a true receipt only when it was passed on, by the mount's config or, for a
-    // session (`?session=`) in a mode ticked for engine mode, by that. No CLI is asked.
+    // session (`?session=`) in a mode ticked for engine mode or listed in the mount's
+    // `enginePresets`, by that. The listed presets come from the mount the request names, which
+    // registered them as it was constructed (engine-mode.ts), so this answer and the turn's overlay
+    // read one rule. No CLI is asked.
     if (req.method === "GET" && url.pathname === `${ROUTE_PREFIX}/system-prompt`) {
       const own = boxOf(url).systemPrompt ?? "claude";
       const session = url.searchParams.get("session");
       if (own === "dsh" || !session) return json(res, 200, { mode: own });
       const hints = await readHints(join(STATE_DIR, "hints.json")).catch(() => ({}));
-      const sent = engineSendsDshPrompt(hints, presetOfSession(c.ctx, session));
+      const listed = registeredEnginePresets(url.searchParams.get("provider") ?? DEFAULT_PROVIDER);
+      const sent = engineSendsDshPrompt(listed, hints, presetOfSession(c.ctx, session));
       return json(res, 200, { mode: sent ? "dsh" : own });
     }
     if (req.method === "GET" && url.pathname === `${ROUTE_PREFIX}/models`) {

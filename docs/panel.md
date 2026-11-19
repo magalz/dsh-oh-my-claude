@@ -153,7 +153,7 @@ In engine mode the session gets dsh's system prompt in place of Claude Code's, d
 
 dsh fixes a session's mode with its first message, so a session stays in the mode it started in. Ticking or clearing that mode, or one of its boxes, reaches its sessions, old and new, on their next turn: Claude is started again with the new options and resumes the conversation.
 
-The settings are box-wide, in `hints.json`: `engineOn` for the switch (off keeps the ticks for when it comes back on), `enginePreset:<mode id>` for each ticked mode, and `engineSkip:<mode id>:<option>` for each box cleared under that mode's What it changes.
+The settings are box-wide, in `hints.json`: `engineOn` for the switch (off keeps the ticks for when it comes back on), `enginePreset:<mode id>` for each ticked mode, and `engineSkip:<mode id>:<option>` for each box cleared under that mode's What it changes. A mode the plugin config's `enginePresets` lists runs in engine mode whether or not it is ticked here, and the card cannot switch it off: configuration puts such a mode in engine mode on every box, and its What it changes fold appears only while it is ticked ([configuration](configuration.md)).
 
 ## Prompt starter
 
