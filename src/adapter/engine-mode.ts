@@ -1,9 +1,10 @@
-// Engine mode per agent preset: sessions started under a preset the owner picked in Settings run
-// Claude Code as dsh's model engine (dsh's prompt and tools, none of the user's Claude settings),
-// and every other session keeps the plugin's config as it is. The choice is box-wide state in the
-// hints store, read each turn. dsh fixes a session's preset once it has a message, so a session
-// moves in or out of engine mode only when its preset's tick changes, at its next turn. From
-// @soffits's engine options (#286, #287).
+// Engine mode per agent preset: sessions started under a preset the plugin config's
+// `enginePresets` lists, or one the owner ticked in Settings, run Claude Code as dsh's model engine
+// (dsh's prompt and tools, none of the user's Claude settings), and every other session keeps the
+// plugin's config as it is. The ticks are box-wide state in the hints store, read each turn; the
+// config's list is fixed for the mount's life. dsh fixes a session's preset once it has a message,
+// so a session moves in or out of engine mode only when its preset starts or stops matching, at its
+// next turn. From @soffits's engine options (#286, #287).
 import { asSessionId, type PluginContext } from "../dsh.js";
 import type { Config } from "./config.js";
 
@@ -32,9 +33,10 @@ export function matchesEnginePreset(
   entries: readonly string[],
   preset: string | null | undefined,
 ): boolean {
-  // Red commit: exact ids only; the trailing-star form comes with the implementation.
   if (!preset) return false;
-  return entries.includes(preset);
+  return entries.some((entry) =>
+    entry.endsWith("*") ? preset.startsWith(entry.slice(0, -1)) : entry === preset,
+  );
 }
 
 /** The config keys engine mode sets, in the order Settings lists them. */
@@ -51,12 +53,13 @@ export const ENGINE_OPTIONS = [
 /** One of the config keys engine mode sets. */
 export type EngineOption = (typeof ENGINE_OPTIONS)[number];
 
-/** The part of the plugin's config engine mode reads and writes. */
-type EngineKeys = Pick<Config, EngineOption>;
+/** The part of the plugin's config engine mode reads: the options it sets, and the preset ids the
+ *  config keeps in engine mode. */
+type EngineKeys = Pick<Config, EngineOption | "enginePresets">;
 
 /** What each option is set to in engine mode. `builtinTools: ["ToolSearch"]` leaves Claude Code
  *  none of its own file or shell tools, so dsh's are served over the bridge in their place. */
-const ENGINE_VALUES: EngineKeys = {
+const ENGINE_VALUES: Pick<Config, EngineOption> = {
   systemPrompt: "dsh",
   builtinTools: ["ToolSearch"],
   toolLoading: "dsh",
@@ -66,13 +69,18 @@ const ENGINE_VALUES: EngineKeys = {
   thinkingDisplay: "summarized",
 };
 
-/** Whether engine mode is on for a session under `preset`: the master switch and that preset's tick
- *  both set. False for no preset, so a dsh without the preset service never runs engine mode. */
+/** Whether engine mode is on for a session under `preset`: listed in the config's `enginePresets`,
+ *  or the master switch and that preset's tick both set. The config only adds, so a listed preset
+ *  is on with the switch off and nothing ticked, and no hint takes it back out. False for no
+ *  preset, so a dsh without the preset service never runs engine mode. */
 function engineOn(
+  listed: readonly string[],
   hints: Readonly<Record<string, boolean | number>>,
   preset: string | null | undefined,
 ): preset is string {
-  return !!preset && hints[ENGINE_ON_KEY] === true && hints[ENGINE_PRESET_PREFIX + preset] === true;
+  if (!preset) return false;
+  if (matchesEnginePreset(listed, preset)) return true;
+  return hints[ENGINE_ON_KEY] === true && hints[ENGINE_PRESET_PREFIX + preset] === true;
 }
 
 /** Whether engine mode sends dsh's system prompt for a session under `preset`, given the
@@ -85,8 +93,7 @@ export function engineSendsDshPrompt(
   hints: Readonly<Record<string, boolean | number>>,
   preset: string | null | undefined,
 ): boolean {
-  // Red commit: the config's list is not consulted yet.
-  return engineOn(hints, preset) && hints[engineSkipKey("systemPrompt", preset)] !== true;
+  return engineOn(listed, hints, preset) && hints[engineSkipKey("systemPrompt", preset)] !== true;
 }
 
 /** The agent preset `sessionId` runs under, from dsh's preset service; null when the session is not
@@ -129,18 +136,18 @@ export function registeredEnginePresets(providerId: string | null | undefined): 
 }
 
 /**
- * The config a session under `preset` runs on: the plugin's own `config` when the master switch
- * is off, when engine mode is off for that preset, or when the session has none (or the preset
- * service is missing); else a copy with
- * every option the preset's own skips leave in set to its engine value. The same object comes back when
- * nothing applies, so a caller can tell the two apart by identity.
+ * The config a session under `preset` runs on: the plugin's own `config` when the preset is neither
+ * listed in the config's `enginePresets` nor ticked in the hints store (or the session has none, or
+ * the preset service is missing); else a copy with every option the preset's own skips leave in set
+ * to its engine value. The same object comes back when nothing applies, so a caller can tell the
+ * two apart by identity.
  */
 export function engineOverlay<T extends EngineKeys>(
   config: T,
   hints: Readonly<Record<string, boolean | number>>,
   preset: string | null | undefined,
 ): T {
-  if (!engineOn(hints, preset)) return config;
+  if (!engineOn(config.enginePresets, hints, preset)) return config;
   const skip = (k: EngineOption): boolean => hints[engineSkipKey(k, preset)] === true;
   const out = { ...config };
   // Written through the engine-keys view of the copy: the copy is a T, and T's own key types may be

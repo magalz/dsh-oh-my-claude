@@ -46,7 +46,7 @@ import {
   usesDshInstructions,
 } from "./instruction-files.js";
 import { ISOLATED_ENV, engineConfigFor, engineDigest } from "./isolate.js";
-import { engineOverlay, presetOfSession } from "./engine-mode.js";
+import { engineOverlay, presetOfSession, registerEnginePresets } from "./engine-mode.js";
 import { guidancePathFor, readGuidanceFile, systemPromptDigest } from "./preset-guidance.js";
 import {
   type ClaudeEvent,
@@ -579,6 +579,9 @@ export class ClaudeCodeAdapter extends LlmAdapter {
         `invalid providerId "${this.providerId}": must be 'claude-code' or start with 'claude-code-'`,
       );
     }
+    // The config's always-on engine presets, kept where the status route can read them: the route
+    // has the request's provider and the hints store, no config object (engine-mode.ts).
+    registerEnginePresets(this.providerId, config.enginePresets);
     this.realClaudeHome = resolveClaudeHome(config.configDir);
     this.claudeHome = this.realClaudeHome;
     this.redact = config.redactSecrets ? buildRedactor(process.env) : undefined;
