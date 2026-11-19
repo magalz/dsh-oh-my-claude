@@ -13,10 +13,18 @@ export interface ForkSourceHeader {
   readonly isSeeded?: boolean;
 }
 
-/** The parent session whose Claude transcript this fork copies, or undefined when it copies none.
- *  Stub for the test-first commit: it answers "none" for every header until the decision is
- *  implemented. */
+/**
+ * The parent session whose Claude transcript this session copies, or undefined when it copies
+ * none. An ordinary fork names its source in `parentSession` and has no `origin`. A subagent's
+ * `parentSession` is its creator, not a fork source, so only a fork subagent copies: dsh records
+ * one as `isSeeded`, a session that "contains a fork-inherited event prefix", and that prefix is
+ * the parent conversation the copied transcript has to match. A fresh subagent starts its own
+ * conversation and is seeded from dsh's log instead. A header with no parent id is never copied,
+ * and neither is a missing header.
+ */
 export function forkSourceOf(header: ForkSourceHeader | undefined): string | undefined {
-  void header;
-  return undefined;
+  const parentId = header?.parentSession;
+  if (!header || !parentId) return undefined;
+  if (header.origin === "subagent" && header.isSeeded !== true) return undefined;
+  return parentId;
 }
