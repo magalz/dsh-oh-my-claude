@@ -8,8 +8,8 @@ export interface ForkSourceHeader {
   readonly parentSession?: string;
   /** `"subagent"` for a session the subagent runtime created; absent for an ordinary fork. */
   readonly origin?: "subagent";
-  /** Whether dsh inherited a prefix of the parent's completed turns into this session (dsh's
-   *  fork subagent); false for a fresh subagent and for an ordinary fork. */
+  /** Whether dsh inherited a prefix of the parent's completed turns into this session: true for a
+   *  fork, subagent or not; false for a fresh subagent. */
   readonly isSeeded?: boolean;
 }
 
