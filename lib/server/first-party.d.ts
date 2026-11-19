@@ -5,23 +5,23 @@ import z from "@deepseek-ai/schemastery";
  * Every field has a default, so an answer in any other shape parses to blanks and reads as "not
  * Anthropic" rather than throwing at the boundary.
  */
-export declare const ProbeBody: z<Schemastery.ObjectS<{
-    type: z<string, string>;
-    request_id: z<string, string>;
-    error: z<Schemastery.ObjectS<{
-        type: z<string, string>;
-    }>, Schemastery.ObjectT<{
-        type: z<string, string>;
-    }>>;
-}>, Schemastery.ObjectT<{
-    type: z<string, string>;
-    request_id: z<string, string>;
-    error: z<Schemastery.ObjectS<{
-        type: z<string, string>;
-    }>, Schemastery.ObjectT<{
-        type: z<string, string>;
-    }>>;
-}>>;
+export declare const ProbeBody: z<Schemastery.ObjectS<NoInfer<{
+    type: z<string, string, "defined">;
+    request_id: z<string, string, "defined">;
+    error: z<Schemastery.ObjectS<NoInfer<{
+        type: z<string, string, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        type: z<string, string, "defined">;
+    }>>, "plain">;
+}>>, Schemastery.ObjectT<NoInfer<{
+    type: z<string, string, "defined">;
+    request_id: z<string, string, "defined">;
+    error: z<Schemastery.ObjectS<NoInfer<{
+        type: z<string, string, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        type: z<string, string, "defined">;
+    }>>, "plain">;
+}>>, "plain">;
 export type ProbeBody = ReturnType<typeof ProbeBody>;
 /** One reading of the endpoint. `undefined` means the question could not be answered. */
 export type FirstPartyProbe = boolean | undefined;

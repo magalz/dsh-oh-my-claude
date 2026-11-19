@@ -77,11 +77,19 @@ export declare function dshToolsGuidance(tools?: readonly ToolSchema[], builtins
  * An auxiliary call, a title or a compaction, returns early with one turn, no tools and no session
  * of its own, and never carries a permission mode, allowed tools, budget or resume. Everything
  * after that early return applies only to a real conversation turn.
+ *
+ * The default mode appends, in order, the caller's one-shot system text, the session preset's
+ * guidance and the dsh tool guidance. Under `dshSystem` that prompt replaces Claude Code's, so
+ * only the tool guidance follows it.
  */
-export declare function buildArgs({ model, reasoningEffort, system, purpose, config, session, accessMode, flags, promptText, mcp, temporary, permissionMode, dshSystem, }: Pick<GenerateOptions, "reasoningEffort" | "system" | "purpose"> & {
+export declare function buildArgs({ model, reasoningEffort, system, purpose, config, session, accessMode, flags, promptText, mcp, temporary, permissionMode, dshSystem, presetGuidance, }: Pick<GenerateOptions, "reasoningEffort" | "system" | "purpose"> & {
     /** dsh's own system prompt (`dshSystemPrompt`), passed only under `systemPrompt: dsh`. It
      *  replaces Claude Code's prompt rather than following it. */
     dshSystem?: string | undefined;
+    /** The trimmed text of the session preset's guidance file (`preset-guidance.ts`), appended
+     *  after the one-shot system text in the default mode and ignored under `dshSystem`, whose
+     *  prompt already carries the preset. */
+    presetGuidance?: string | undefined;
     model: string | undefined;
     config: Schemastery.TypeT<typeof Config>;
     session?: {

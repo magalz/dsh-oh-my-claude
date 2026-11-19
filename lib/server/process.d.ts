@@ -781,9 +781,11 @@ export interface ClaudeProcessSpec {
      *  before the field existed; a flip changes the key and the session's next turn respawns, never
      *  the turn in flight. */
     child?: "node" | "dsh";
-    /** A digest of dsh's system prompt when the `dsh` system prompt mode passed it with
-     *  `--system-prompt`. Absent otherwise, so every other spec keys as before; a prompt dsh changed
-     *  changes the key, and the session's next turn starts a process that reads the new one. */
+    /** A digest of the system prompt text the process was started with: dsh's prompt when the `dsh`
+     *  system prompt mode passed it with `--system-prompt`, or the session preset's guidance file
+     *  when the default mode appended it with `--append-system-prompt`. Absent when neither is
+     *  sent, so every other spec keys as before; a changed prompt or file changes the key, and the
+     *  session's next turn starts a process that reads the new one. */
     system?: string;
     /** A digest of the bridged dsh tools (names, parameter schemas, deferral) under
      *  `followToolSet`. Claude Code lists an MCP server's tools once, at start, so a changed set
@@ -797,6 +799,12 @@ export interface ClaudeProcessSpec {
     /** Set when the process runs under `isolate` (the config's, or engine mode's for the session's
      *  preset): the spawner hands it isolate's environment, which is fixed at spawn like the rest. */
     isolate?: true;
+    /** The environment this process was started with for the `dsh` instruction-files mode: the one
+     *  variable that switches Claude Code's own CLAUDE.md loading off (`instruction-files.ts`).
+     *  Absent in the default mode and under `isolate`, whose environment already carries it, so
+     *  every other spec keys exactly as it did. Switching the mode changes the key, and the session's
+     *  next turn starts a process that loads dsh's instructions and not Claude Code's. */
+    instructionEnv?: Record<string, string>;
 }
 /** What the caller wants to know when a Claude process ends, live or after a restart. */
 export interface ClaudeProcessOnExit {
