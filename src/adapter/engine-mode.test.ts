@@ -14,11 +14,16 @@ import {
   enginePresets,
   engineSendsDshPrompt,
   engineSkipKey,
+  matchesEnginePreset,
   presetOfSession,
+  registeredEnginePresets,
 } from "./engine-mode.js";
 import { engineDigest } from "./isolate.js";
 
 const base = new Config({});
+// The new key's default: nothing is in engine mode by configuration, so every rule below is the
+// hints store's alone until a block names a list.
+assert.deepEqual(base.enginePresets, []);
 const on = { engineOn: true, "enginePreset:engine": true } as const;
 
 // The master switch off: nothing applies, whatever is ticked under it.
@@ -86,17 +91,110 @@ assert.deepEqual(
   assert.equal(engineSkipKey("isolate", "assistant"), "engineSkip:assistant:isolate");
 }
 
+// An exact id in the config puts that preset in engine mode with the master switch off and nothing
+// ticked; a preset the list does not name keeps the plugin's own config.
+{
+  const exact = new Config({ enginePresets: ["crew-worker"] });
+  const worker = engineOverlay(exact, {}, "crew-worker");
+  assert.notEqual(worker, exact, "a listed preset is in engine mode");
+  assert.equal(worker.systemPrompt, "dsh", "the whole bundle applies");
+  assert.equal(worker.isolate, true);
+  assert.equal(engineOverlay(exact, {}, "crew-scout"), exact, "another preset stays out");
+  assert.equal(engineOverlay(exact, {}, null), exact, "no preset is never matched");
+}
+
+// One trailing star is a prefix: `crew-*` covers every crew- id and nothing else, so not
+// `crewmate` (no dash), not another preset, and never the empty id.
+{
+  const crew = new Config({ enginePresets: ["crew-*"] });
+  for (const id of ["crew-scout", "crew-implementer", "crew-reviewer", "crew-worker"])
+    assert.equal(engineOverlay(crew, {}, id).systemPrompt, "dsh", `${id} is matched`);
+  for (const other of ["crewmate", "claude-mode", ""])
+    assert.equal(engineOverlay(crew, {}, other), crew, `${other || "the empty id"} is left out`);
+  assert.equal(engineOverlay(crew, {}, undefined), crew);
+  assert.equal(matchesEnginePreset(["crew-*"], "crew-scout"), true);
+  assert.equal(matchesEnginePreset(["crew-*"], "crewmate"), false);
+  assert.equal(matchesEnginePreset(["crew-*"], ""), false);
+}
+
+// No star is exact: `crew` is only `crew`, never a prefix. A star anywhere but the end is a literal
+// character, so those entries match only that exact text.
+{
+  const bare = new Config({ enginePresets: ["crew"] });
+  assert.equal(
+    engineOverlay(bare, {}, "crew-scout"),
+    bare,
+    "an entry without a star does not prefix",
+  );
+  assert.equal(engineOverlay(bare, {}, "crew").systemPrompt, "dsh");
+  const literal = new Config({ enginePresets: ["*crew", "crew-*x"] });
+  assert.equal(engineOverlay(literal, {}, "crew-scout"), literal);
+  assert.equal(engineOverlay(literal, {}, "crew-"), literal);
+  assert.equal(
+    engineOverlay(literal, {}, "*crew").systemPrompt,
+    "dsh",
+    "the exact text, star and all",
+  );
+  assert.equal(engineOverlay(literal, {}, "crew-*x").systemPrompt, "dsh");
+}
+
+// The per-option opt-outs are still the hints store's, keyed by preset id, and they apply to a
+// config-listed preset exactly as they do to a ticked one.
+{
+  const crew = new Config({ enginePresets: ["crew-*"] });
+  const skip = { [engineSkipKey("isolate", "crew-scout")]: true };
+  const noIsolate = engineOverlay(crew, skip, "crew-scout");
+  assert.equal(noIsolate.isolate, false, "a cleared box leaves its own option out");
+  assert.equal(noIsolate.systemPrompt, "dsh", "the rest of the bundle still applies");
+  assert.equal(
+    engineOverlay(crew, skip, "crew-reviewer").isolate,
+    true,
+    "one mode's skip never reaches another",
+  );
+}
+
 // The chat's row mask: dsh's prompt goes out only for a ticked mode, with the switch on and the
 // mode's system-prompt box left in.
-assert.equal(engineSendsDshPrompt(on, "engine"), true);
-assert.equal(engineSendsDshPrompt({ "enginePreset:engine": true }, "engine"), false, "master off");
-assert.equal(engineSendsDshPrompt(on, "standard"), false);
-assert.equal(engineSendsDshPrompt(on, null), false);
+assert.equal(engineSendsDshPrompt([], on, "engine"), true);
 assert.equal(
-  engineSendsDshPrompt({ ...on, [engineSkipKey("systemPrompt", "engine")]: true }, "engine"),
+  engineSendsDshPrompt([], { ...on, [engineSkipKey("systemPrompt", "engine")]: true }, "engine"),
   false,
   "the mode's own skip",
 );
+assert.equal(
+  engineSendsDshPrompt([], { "enginePreset:engine": true }, "engine"),
+  false,
+  "master off",
+);
+assert.equal(engineSendsDshPrompt([], on, "standard"), false);
+assert.equal(engineSendsDshPrompt([], on, null), false);
+// The config alone answers yes: a listed preset sends dsh's prompt with the switch off and nothing
+// ticked, and its own system-prompt box still removes it.
+{
+  const crew = new Config({ enginePresets: ["crew-*"] });
+  assert.equal(engineSendsDshPrompt(crew.enginePresets, {}, "crew-scout"), true);
+  assert.equal(engineSendsDshPrompt(crew.enginePresets, {}, "crewmate"), false, "not listed");
+  assert.equal(engineSendsDshPrompt(crew.enginePresets, {}, null), false, "no preset");
+  assert.equal(
+    engineSendsDshPrompt(
+      crew.enginePresets,
+      { [engineSkipKey("systemPrompt", "crew-scout")]: true },
+      "crew-scout",
+    ),
+    false,
+    "the mode's own skip",
+  );
+  assert.equal(
+    engineSendsDshPrompt(crew.enginePresets, on, "engine"),
+    true,
+    "a ticked mode still follows the hints",
+  );
+  assert.equal(
+    engineSendsDshPrompt(crew.enginePresets, {}, "engine"),
+    false,
+    "and only when ticked",
+  );
+}
 // A preset service that throws, or none, reads as no preset.
 // SAFETY: partial fakes; presetOfSession reads sessions.get and the preset service only
 assert.equal(
@@ -193,6 +291,50 @@ assert.deepEqual(enginePresets({ "enginePreset:a": true, "enginePreset:b": true,
   assert.equal(a.localEnvOverride(false, undefined, false, true)?.MCP_TOOL_TIMEOUT, "2000000000");
   assert.equal(a.localEnvOverride(false, undefined, false, false)?.MCP_TOOL_TIMEOUT, undefined);
   assert.equal(a.localEnvOverride(false)?.MCP_TOOL_TIMEOUT, undefined, "default: the config's off");
+}
+
+// Through the adapter: the config's list reaches the turn with an empty hints store, and the mount
+// registers the same list for the status route's "dsh's prompt was sent" answer.
+{
+  await writeFile(join(STATE_DIR, "hints.json"), "{}");
+  const presets: Record<string, string> = { s1: "crew-scout", s2: "crewmate" };
+  // SAFETY: partial fake; sessionConfigOf reads sessions.get and the preset service only
+  const ctx = {
+    on() {},
+    sessions: { get: (id: string) => ({ id }) },
+    get: (name: string) =>
+      name === "agentPresets"
+        ? { presetForSession: (s: { id: string }) => presets[s.id] ?? null }
+        : undefined,
+  } as unknown as PluginContext;
+  const a = new ClaudeCodeAdapter(ctx, Config({ enginePresets: ["crew-*"] }));
+  assert.equal(
+    (await a.sessionConfigOf("s1")).isolate,
+    true,
+    "a listed preset runs in engine mode",
+  );
+  assert.equal(a.configFor("s1").systemPrompt, "dsh");
+  assert.equal(
+    await a.sessionConfigOf("s2"),
+    a.config,
+    "an unlisted preset keeps the plugin's config",
+  );
+  assert.deepEqual(
+    registeredEnginePresets("claude-code"),
+    ["crew-*"],
+    "the mount registered its list",
+  );
+}
+
+// The key's default is an empty list, and an empty list adds nothing: the expectations written
+// before the key existed all still hold, and the hints store alone still turns engine mode on.
+{
+  const empty = new Config({ enginePresets: [] });
+  assert.deepEqual(empty.enginePresets, []);
+  assert.equal(engineOverlay(empty, {}, "engine"), empty, "nothing listed, nothing ticked");
+  assert.equal(engineOverlay(empty, on, "engine").systemPrompt, "dsh", "the hints store alone");
+  assert.equal(engineSendsDshPrompt(empty.enginePresets, on, "engine"), true);
+  assert.equal(engineSendsDshPrompt(empty.enginePresets, {}, "engine"), false);
 }
 
 console.log("engine-mode: ok");

@@ -21,6 +21,22 @@ export const ENGINE_SKIP_PREFIX = "engineSkip:";
 export const engineSkipKey = (option: EngineOption, preset: string): string =>
   `${ENGINE_SKIP_PREFIX}${preset}:${option}`;
 
+/**
+ * Whether `preset` matches an entry in `entries`: an exact preset id, or an entry ending in one `*`
+ * that matches every id starting with the text before it (`crew-*` covers `crew-scout`). No other
+ * pattern syntax: `crew` is only `crew`, and a `*` anywhere but the end is a literal character.
+ * Null, undefined and the empty id never match, so a session with no preset never runs in engine
+ * mode however the list is written.
+ */
+export function matchesEnginePreset(
+  entries: readonly string[],
+  preset: string | null | undefined,
+): boolean {
+  // Red commit: exact ids only; the trailing-star form comes with the implementation.
+  if (!preset) return false;
+  return entries.includes(preset);
+}
+
 /** The config keys engine mode sets, in the order Settings lists them. */
 export const ENGINE_OPTIONS = [
   "systemPrompt",
@@ -59,13 +75,17 @@ function engineOn(
   return !!preset && hints[ENGINE_ON_KEY] === true && hints[ENGINE_PRESET_PREFIX + preset] === true;
 }
 
-/** Whether engine mode sends dsh's system prompt for a session under `preset`: on for the preset,
- *  and its `systemPrompt` box not cleared. The chat's row mask asks this, beside the mount's own
- *  `systemPrompt`, to tell whether dsh's "System prompt" row reached Claude. */
+/** Whether engine mode sends dsh's system prompt for a session under `preset`, given the
+ *  `enginePresets` list its mount's config names: on for the preset (listed there, or ticked in
+ *  the hints store with the master switch on), and its `systemPrompt` box not cleared. The chat's
+ *  row mask asks this, beside the mount's own `systemPrompt`, to tell whether dsh's "System
+ *  prompt" row reached Claude. */
 export function engineSendsDshPrompt(
+  listed: readonly string[],
   hints: Readonly<Record<string, boolean | number>>,
   preset: string | null | undefined,
 ): boolean {
+  // Red commit: the config's list is not consulted yet.
   return engineOn(hints, preset) && hints[engineSkipKey("systemPrompt", preset)] !== true;
 }
 
@@ -85,6 +105,27 @@ export function enginePresets(hints: Readonly<Record<string, boolean | number>>)
   return Object.keys(hints)
     .filter((k) => k.startsWith(ENGINE_PRESET_PREFIX) && hints[k] === true)
     .map((k) => k.slice(ENGINE_PRESET_PREFIX.length));
+}
+
+/** The `enginePresets` list each mounted provider's config names, keyed by provider id. A turn's
+ *  answer comes from the adapter's own config; the status route has no config object, so the
+ *  adapter registers its list here as it is constructed and the route reads it back. A config edit
+ *  re-mounts the plugin, so the list is the one the config held when the mount loaded. */
+const configPresets = new Map<string, readonly string[]>();
+
+/** Record the `enginePresets` list `providerId`'s config names; the adapter calls this once, from
+ *  its constructor. The list is copied, so a later edit to the config object cannot change what the
+ *  route answers. */
+export function registerEnginePresets(providerId: string, presets: readonly string[]): void {
+  configPresets.set(providerId, [...presets]);
+}
+
+/** The `enginePresets` list `providerId`'s config named: what the status route hands to
+ *  `engineSendsDshPrompt`. Empty for a provider this process has not mounted, so a request naming
+ *  an unknown provider reads as no config-listed presets rather than failing. */
+export function registeredEnginePresets(providerId: string | null | undefined): readonly string[] {
+  if (providerId === null || providerId === undefined) return [];
+  return configPresets.get(providerId) ?? [];
 }
 
 /**

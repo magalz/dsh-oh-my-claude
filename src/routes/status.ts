@@ -9,7 +9,11 @@ import { type RouteHandler, UNHANDLED } from "./context.js";
 import type { DiagnosticFile, MountBox, RouteCtx } from "../sessions.js";
 import { parseChangelog } from "../changelog.js";
 import { unknownEffortLevels } from "../adapter/catalog.js";
-import { engineSendsDshPrompt, presetOfSession } from "../adapter/engine-mode.js";
+import {
+  engineSendsDshPrompt,
+  presetOfSession,
+  registeredEnginePresets,
+} from "../adapter/engine-mode.js";
 import { errorText, shq, sshArgs } from "../process.js";
 import { buildReport, type PrivateValues, type ReportInput } from "../report.js";
 import { repairsSummary } from "../session-heal.js";
@@ -125,7 +129,8 @@ export function statusRoutes(c: RouteCtx): RouteHandler {
       const session = url.searchParams.get("session");
       if (own === "dsh" || !session) return json(res, 200, { mode: own });
       const hints = await readHints(join(STATE_DIR, "hints.json")).catch(() => ({}));
-      const sent = engineSendsDshPrompt(hints, presetOfSession(c.ctx, session));
+      const listed = registeredEnginePresets(url.searchParams.get("provider") ?? DEFAULT_PROVIDER);
+      const sent = engineSendsDshPrompt(listed, hints, presetOfSession(c.ctx, session));
       return json(res, 200, { mode: sent ? "dsh" : own });
     }
     if (req.method === "GET" && url.pathname === `${ROUTE_PREFIX}/models`) {

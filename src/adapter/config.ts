@@ -101,6 +101,10 @@ export type Config = {
   /** dsh agent preset id → absolute path of a UTF-8 text file whose trimmed text is appended to
    *  Claude Code's system prompt in the default mode; unused under `systemPrompt: "dsh"`. */
   presetGuidance: Record<string, string>;
+  /** dsh agent preset ids that always run in engine mode: an exact id, or a prefix with one
+   *  trailing `*` (for example `crew-*`) matching every id that starts with it. Only adds presets;
+   *  a listed one runs in engine mode whatever the Settings card's switch and ticks say. */
+  enginePresets: string[];
   verbatimPrompts: boolean;
   isolate: boolean;
   replayToolTextLimit: number;
@@ -284,6 +288,12 @@ export const Config = z.object({
     .default({})
     .description(
       "Text appended to Claude Code's own system prompt per dsh agent preset: a map from preset id to the absolute path of a UTF-8 text file. In the default mode the file's trimmed text sits between dsh's one-shot system text and the plugin's dsh tool guidance in --append-system-prompt. Not sent under 'dsh', whose prompt already carries the preset. A missing, unreadable, empty or over-32-KiB file contributes nothing and is logged once; the turn proceeds. A changed file starts a new Claude process on the session's next turn",
+    ),
+  enginePresets: z
+    .array(z.string())
+    .default([])
+    .description(
+      "dsh agent preset ids that always run in engine mode, whatever Settings → Oh My Claude → Claude as dsh's engine says. An entry is an exact preset id, or a prefix with one trailing '*': 'crew-*' matches every id starting with 'crew-', 'crew' matches only 'crew', and a '*' anywhere else is a literal character. The list only adds: a listed preset runs in engine mode with the master switch off or no tick, and unticking it in the card cannot take it back out; a preset neither listed nor ticked runs as before. The per-mode engineSkip:<mode id>:<option> hints still leave single changes out of a listed mode. A session with no preset is never matched. Applies when dsh next loads the plugin",
     ),
   verbatimPrompts: z
     .boolean()
