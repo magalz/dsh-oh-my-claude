@@ -24,12 +24,7 @@ import {
 import { repairStoredTurns } from "../turn-repair.js";
 import { firstPartyKnown, firstPartyMode, wantsFirstParty } from "../first-party.js";
 import { readCompactSummary } from "../compact-summary.js";
-import {
-  CONTEXT_SIZE_KEYS,
-  contextDrops,
-  type ContextSizes,
-  type ContextSource,
-} from "../context-sources.js";
+import { CONTEXT_SIZE_KEYS, type ContextSizes, type ContextSource } from "../context-sources.js";
 import {
   accountIdentity,
   forgetIdentity,
@@ -44,6 +39,12 @@ import { managedDir } from "../instructions.js";
 import { readUsage, stillLimitedUntil } from "../usage.js";
 import { MCP_PATH, type McpBridge } from "../mcp.js";
 import { KEY_ENV } from "../mcp-config.js";
+import {
+  instructionCopiesFor,
+  instructionDropsFor,
+  instructionEnvFor,
+  usesDshInstructions,
+} from "./instruction-files.js";
 import { ISOLATED_ENV, engineConfigFor, engineDigest } from "./isolate.js";
 import { engineOverlay, presetOfSession } from "./engine-mode.js";
 import { guidancePathFor, readGuidanceFile, systemPromptDigest } from "./preset-guidance.js";
@@ -1728,7 +1729,6 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     // One small file read per turn, next to a process spawn. No cache: the Settings card writes
     // this file, and a stale set is a switch that visibly does nothing.
     const hints = await readHints(join(this.stateDir, "hints.json"));
-    const drops = contextDrops(hints);
     // Asked of the base URL the CLI will really use, which settings.json can set over the head of
     // dsh's own environment: with a router there and a forwarding proxy exported, the exported
     // one's answer would tell the CLI its router is Anthropic.
@@ -1776,9 +1776,17 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     // its flags nor the CLAUDE.md copy apply there. Mixed, a box's CLI read its CLAUDE.md while
     // dsh's copy was kept as well.
     const engineConfig = engineConfigFor(cfg, targetHost);
-    // Claude Code loads no CLAUDE.md under `isolate` and expands no `/skill` line under
-    // `verbatimPrompts`, so dsh's copies of those are then the only ones and are kept.
-    const copies = { claudeMd: !engineConfig.isolate, skills: !cfg.verbatimPrompts };
+    // `instructionFiles: "dsh"` switches Claude Code's own CLAUDE.md loading off and forwards dsh's
+    // bundle whole. Local turns only: the variable cannot be handed to a box's claude, and a side
+    // call carries no conversation to instruct, so both keep the default arrangement.
+    const dshInstructions = usesDshInstructions(cfg, targetHost, options.purpose);
+    // With Claude Code loading none of its own files, dsh's copy is not a duplicate: the block is
+    // forwarded whatever the switches say. The skills block keeps following them.
+    const drops = instructionDropsFor(hints, dshInstructions);
+    // Claude Code loads no CLAUDE.md under `isolate` or in the `dsh` instruction mode, and expands
+    // no `/skill` line under `verbatimPrompts`, so dsh's copies of those are then the only ones and
+    // are kept.
+    const copies = instructionCopiesFor(dshInstructions, engineConfig.isolate, cfg.verbatimPrompts);
     // No transcript to resume: dsh's log becomes one, so the CLI resumes the conversation as turns
     // and only the new turn goes as the prompt. Every earlier reply then counts, whichever route
     // wrote it, so the prompt starts after the last of them.
@@ -1882,6 +1890,10 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     if (engine !== undefined) spec.engine = engine;
     // Its environment is fixed at spawn, so isolate rides on the spec the spawner reads.
     if (engineConfig.isolate) spec.isolate = true;
+    // The same for the one variable the `dsh` instruction mode adds. Absent in the default mode and
+    // under `isolate`, whose environment already carries it, so those specs key exactly as before.
+    const instructionEnv = instructionEnvFor(dshInstructions, engineConfig.isolate);
+    if (instructionEnv !== undefined) spec.instructionEnv = instructionEnv;
     // An environment is fixed at spawn, so the switch joins the spec: a session already running
     // when it flips is replaced on its next turn and resumes with the window the switch gives.
     // Local spawns only; the flag does not ride to a box, whose own environment decides.
@@ -4121,15 +4133,19 @@ export class ClaudeCodeAdapter extends LlmAdapter {
   }
 
   /**
-   * What this instance adds to a local Claude's environment: its config dir when it has one, and
-   * this box's panel login as CLAUDE_CODE_OAUTH_TOKEN for the default instance. A second instance
-   * keeps its own login, which is what a second instance is for.
+   * What this instance adds to a local Claude's environment: its config dir when it has one, this
+   * box's panel login as CLAUDE_CODE_OAUTH_TOKEN for the default instance (a second instance keeps
+   * its own login, which is what a second instance is for), isolate's set when the spec says so,
+   * and the `dsh` instruction mode's one variable. `instructionEnv` comes off the spec like
+   * `isolate`: the environment is fixed at spawn, so the caller reads the decision and the key off
+   * one snapshot.
    */
   localEnvOverride(
     firstParty = this.proxyFirstParty,
     window?: number,
     routed = false,
     isolate = this.config.isolate,
+    instructionEnv?: Record<string, string>,
   ): Record<string, string> | undefined {
     const over: Record<string, string> = {};
     if (this.config.configDir || this.config.ownTranscripts)
@@ -4159,6 +4175,9 @@ export class ClaudeCodeAdapter extends LlmAdapter {
       over.CLAUDE_CODE_AUTO_COMPACT_WINDOW = String(window);
     }
     if (isolate) Object.assign(over, ISOLATED_ENV);
+    // Under isolate this is undefined: ISOLATED_ENV already carries the variable, and merging the
+    // same value twice would say the mode changed an environment it did not.
+    if (instructionEnv) Object.assign(over, instructionEnv);
     return Object.keys(over).length === 0 ? undefined : over;
   }
 
@@ -4169,8 +4188,17 @@ export class ClaudeCodeAdapter extends LlmAdapter {
   }
 
   /** The child env a keeper hands Claude: dsh's environment plus the plugin's additions. */
-  keeperEnv(firstParty?: boolean, window?: number, routed?: boolean, isolate?: boolean) {
-    return childEnv(process.env, this.localEnvOverride(firstParty, window, routed, isolate));
+  keeperEnv(
+    firstParty?: boolean,
+    window?: number,
+    routed?: boolean,
+    isolate?: boolean,
+    instructionEnv?: Record<string, string>,
+  ) {
+    return childEnv(
+      process.env,
+      this.localEnvOverride(firstParty, window, routed, isolate, instructionEnv),
+    );
   }
 
   /** Spawner for one session: keeper mode needs the session to place and name the keeper. A spec
@@ -4185,6 +4213,7 @@ export class ClaudeCodeAdapter extends LlmAdapter {
         spec.window,
         spec.routed === true,
         spec.isolate === true,
+        spec.instructionEnv,
       );
     const boxHost = this.config.sshHost;
     if (boxHost)
@@ -4215,6 +4244,7 @@ export class ClaudeCodeAdapter extends LlmAdapter {
               spec.window,
               spec.routed === true,
               spec.isolate === true,
+              spec.instructionEnv,
             ),
             sessionId,
             procSpec: spec,
@@ -4772,6 +4802,7 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     window?: number,
     routed = false,
     isolate = this.config.isolate,
+    instructionEnv?: Record<string, string>,
   ) {
     // A remote instance drives the far `claude` over SSH; no keeper, no seam, its own remote login.
     // A remote-workspace cwd is a local placeholder here; redirect it to the box's real path.
@@ -4789,7 +4820,12 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     }
     // Read per spawn, not once: a login made in the panel applies to the next session started.
     const local: Spawner = (command, args, cwd) =>
-      base(command, args, cwd, this.localEnvOverride(firstParty, window, routed, isolate));
+      base(
+        command,
+        args,
+        cwd,
+        this.localEnvOverride(firstParty, window, routed, isolate, instructionEnv),
+      );
     // A remote-workspace cwd runs the far `claude` over SSH on its box, even when this provider is
     // local: otherwise the session sits in the empty local placeholder dir.
     return (command: string, args: string[], cwd: string) => {
@@ -7595,7 +7631,7 @@ export class ClaudeCodeAdapter extends LlmAdapter {
    *  session title. No tool activity is shown, and a permission or control request is refused
    *  rather than asked, since nobody is watching a side call. */
   async *oneShot(options: GenerateOptions): AsyncGenerator<StreamChunk> {
-    const { cwd, args, session, input } = await this.prepare(options);
+    const { cwd, args, session, input, spec: prepared } = await this.prepare(options);
     const proc = new ClaudeProcess({
       args: args.filter(
         (a, i) => !(a === "--permission-prompt-tool" || args[i - 1] === "--permission-prompt-tool"),
@@ -7610,7 +7646,16 @@ export class ClaudeCodeAdapter extends LlmAdapter {
         temporary: false,
       },
       command: this.config.command,
-      spawner: this.spawner(undefined, undefined, undefined, await this.boxRouted()),
+      // This path builds its own spec, so the environment the prepared turn decided on (the
+      // instruction-files mode's one variable) has to reach the spawner here too.
+      spawner: this.spawner(
+        undefined,
+        undefined,
+        undefined,
+        await this.boxRouted(),
+        this.config.isolate,
+        prepared.instructionEnv,
+      ),
       onExit: () => {},
     });
     if (this.config.debug) this.log("info", `one-shot cwd=${cwd} claude ${proc.args.join(" ")}`);

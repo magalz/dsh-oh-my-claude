@@ -20,12 +20,15 @@ import { specKey } from "./turn.js";
 // The default mode is today's arrangement, for every hint combination: nothing added to the
 // environment, dsh's CLAUDE.md sections left out because Claude Code loads its own, and the drops
 // the switches have always made.
+assert.equal(new Config({}).instructionFiles, "claude", "the config key defaults to Claude");
+assert.equal(new Config({ instructionFiles: "dsh" }).instructionFiles, "dsh");
 assert.equal(usesDshInstructions({ instructionFiles: "claude" }, undefined, undefined), false);
-for (const [label, hints] of [
+const hintSets: [string, Record<string, boolean | number>][] = [
   ["master off", {}],
   ["master on", { dshContextOn: true }],
   ["instructions off", { dshContextOn: true, dshContextInstructionsOff: true }],
-] as const) {
+];
+for (const [label, hints] of hintSets) {
   assert.equal(instructionEnvFor(false, false), undefined, `no env: ${label}`);
   assert.deepEqual(
     instructionCopiesFor(false, false, false),
@@ -46,7 +49,8 @@ const dshLocal = usesDshInstructions({ instructionFiles: "dsh" }, undefined, und
 assert.equal(dshLocal, true);
 const env = instructionEnvFor(dshLocal, false);
 assert.ok(env !== undefined, "the mode adds an environment");
-assert.deepEqual(env, { CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1" });
+assert.deepEqual(Object.keys(env), ["CLAUDE_CODE_DISABLE_CLAUDE_MDS"], "one variable only");
+assert.equal(env.CLAUDE_CODE_DISABLE_CLAUDE_MDS, "1");
 for (const name of Object.keys(ISOLATED_ENV)) {
   if (name === "CLAUDE_CODE_DISABLE_CLAUDE_MDS") continue;
   assert.equal(env[name], undefined, `nothing else from isolate: ${name}`);
@@ -59,15 +63,20 @@ assert.equal(child.CLAUDE_CODE_DISABLE_AUTO_MEMORY, "1", "an inherited name is l
 // follows `verbatimPrompts`, and `instructions` is forwarded whatever the switches say.
 assert.deepEqual(instructionCopiesFor(dshLocal, false, false), { claudeMd: false, skills: true });
 assert.deepEqual(instructionCopiesFor(dshLocal, false, true), { claudeMd: false, skills: false });
-for (const hints of [
+const dshHintSets: Record<string, boolean | number>[] = [
   {},
   { dshContextOn: true },
   { dshContextOn: true, dshContextInstructionsOff: true },
   { dshContextOn: true, dshContextSkillsOff: true },
-]) {
+];
+for (const hints of dshHintSets) {
   const drops = instructionDropsFor(hints, dshLocal);
   assert.ok(!drops.has("instructions"), "dsh's instruction block is always forwarded");
-  assert.equal(drops.has("skills"), contextDrops(hints).has("skills"), "skills follow the switches");
+  assert.equal(
+    drops.has("skills"),
+    contextDrops(hints).has("skills"),
+    "skills follow the switches",
+  );
 }
 
 // A box's Claude Code cannot be handed the variable and keeps loading its own files, and a side
@@ -95,7 +104,11 @@ for (const [label, targetHost, purpose] of [
 // own and the isolate environment is exactly what it was; all it adds is the forwarding above.
 assert.equal(instructionEnvFor(dshLocal, true), undefined, "isolate already carries the variable");
 assert.deepEqual(instructionCopiesFor(dshLocal, true, false), { claudeMd: false, skills: true });
-for (const hints of [{}, { dshContextOn: true, dshContextInstructionsOff: true }]) {
+const isolatedHints: Record<string, boolean | number>[] = [
+  {},
+  { dshContextOn: true, dshContextInstructionsOff: true },
+];
+for (const hints of isolatedHints) {
   assert.ok(!instructionDropsFor(hints, true).has("instructions"));
 }
 const isolatedEnv = childEnv({}, ISOLATED_ENV);
@@ -114,7 +127,13 @@ assert.equal(isolatedEnv.CLAUDE_CODE_SIMPLE, undefined);
     undefined,
     "default: absent",
   );
-  const over = adapter.localEnvOverride(false, undefined, false, false, instructionEnvFor(dshLocal, false));
+  const over = adapter.localEnvOverride(
+    false,
+    undefined,
+    false,
+    false,
+    instructionEnvFor(dshLocal, false),
+  );
   assert.equal(over?.CLAUDE_CODE_DISABLE_CLAUDE_MDS, "1");
   assert.equal(over?.CLAUDE_CODE_DISABLE_AUTO_MEMORY, undefined, "nothing else from isolate");
   const isolatedOver = adapter.localEnvOverride(
