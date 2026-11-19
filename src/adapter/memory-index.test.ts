@@ -109,4 +109,33 @@ const dir = tempDir("omc-memory-index-");
   assert.ok(!read.text.includes("\uFFFD"), "no character was broken at the cut");
 }
 
+// The limit is on what is sent: an index that fits once trimmed comes back whole and without a
+// notice, however much blank space the file carries after it.
+{
+  const padded = join(dir, "padded");
+  await mkdir(padded);
+  const lines = Array.from(
+    { length: 60 },
+    (_, i) => `- [note-${i}](note-${i}.md) \u2014 ${"x".repeat(60)}`,
+  );
+  await writeFile(
+    join(padded, "MEMORY.md"),
+    `${lines.join("\n")}${"\n".repeat(MEMORY_INDEX_MAX_BYTES)}`,
+    "utf8",
+  );
+  const read = await readMemoryIndex(padded);
+  if (!read.ok) assert.fail("a padded index still reads");
+  assert.equal(read.text, lines.join("\n"), "nothing was cut, so there is no notice");
+}
+
+// A first line that does not fit leaves only the notice: a line is never cut in half.
+{
+  const oneLine = join(dir, "one-line");
+  await mkdir(oneLine);
+  await writeFile(join(oneLine, "MEMORY.md"), "x".repeat(MEMORY_INDEX_MAX_BYTES + 1), "utf8");
+  const read = await readMemoryIndex(oneLine);
+  if (!read.ok) assert.fail("an index of one oversized line still answers");
+  assert.match(read.text, /^\[auto-memory index cut at \d+ bytes; the rest is in the file\]$/);
+}
+
 console.log("memory-index: ok");
