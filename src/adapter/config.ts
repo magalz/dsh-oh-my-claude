@@ -98,6 +98,11 @@ export type Config = {
   refusalAsFailure: boolean;
   systemPrompt: "claude" | "dsh";
   instructionFiles: "claude" | "dsh";
+  /** Append the workspace's auto-memory index (MEMORY.md) to Claude Code's system prompt: only with
+   *  `instructionFiles: "dsh"` and in the default prompt mode, read when the Claude process starts
+   *  so a changed index reaches a session when its process next starts. Ignored under `isolate`, under
+   *  `systemPrompt: "dsh"`, for side calls and on a remote box. */
+  memoryIndex: boolean;
   /** dsh agent preset id → absolute path of a UTF-8 text file whose trimmed text is appended to
    *  Claude Code's system prompt in the default mode; unused under `systemPrompt: "dsh"`. */
   presetGuidance: Record<string, string>;
@@ -281,7 +286,13 @@ export const Config = z.object({
     .union(["claude", "dsh"])
     .default("claude")
     .description(
-      "Which instruction files Claude reads. 'claude': Claude Code loads its own (CLAUDE.md at user, project and local level, which may import AGENTS.md), and dsh's instruction block is sent only when the Settings context switch allows it, with the CLAUDE.md sections Claude Code already loaded taken out. 'dsh': Claude Code's own loading is switched off for the session (CLAUDE_CODE_DISABLE_CLAUDE_MDS=1, and nothing else of isolate; its prompt, tools, hooks, skills, plugins, MCP servers and memory stay native) and dsh's block is always forwarded whole, CLAUDE.md sections included, so the instructions written for dsh (dsh's user-level ~/.dsh/AGENTS.md too) reach Claude without the user's Claude Code instruction files. Local spawns only: a remote box's Claude Code keeps loading its own files. A change starts a new Claude process on the session's next turn",
+      "Which instruction files Claude reads. 'claude': Claude Code loads its own (CLAUDE.md at user, project and local level, which may import AGENTS.md), and dsh's instruction block is sent only when the Settings context switch allows it, with the CLAUDE.md sections Claude Code already loaded taken out. 'dsh': Claude Code's own loading is switched off for the session (CLAUDE_CODE_DISABLE_CLAUDE_MDS=1, and nothing else of isolate; its prompt, tools, hooks, skills, plugins and MCP servers stay native; its auto-memory index is no longer loaded, see memoryIndex) and dsh's block is always forwarded whole, CLAUDE.md sections included, so the instructions written for dsh (dsh's user-level ~/.dsh/AGENTS.md too) reach Claude without the user's Claude Code instruction files. Local spawns only: a remote box's Claude Code keeps loading its own files. A change starts a new Claude process on the session's next turn",
+    ),
+  memoryIndex: z
+    .boolean()
+    .default(false)
+    .description(
+      "Append the workspace's auto-memory index (MEMORY.md) to Claude Code's system prompt, only with 'instructionFiles: dsh' and in the default prompt mode. It is read when the Claude process starts, so a changed index reaches a session when its process next starts. Ignored under isolate, under 'systemPrompt: dsh', for side calls and on a remote box",
     ),
   presetGuidance: z
     .dict(z.string())

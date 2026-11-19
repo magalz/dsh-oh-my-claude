@@ -55,6 +55,11 @@ export type Config = {
     refusalAsFailure: boolean;
     systemPrompt: "claude" | "dsh";
     instructionFiles: "claude" | "dsh";
+    /** Append the workspace's auto-memory index (MEMORY.md) to Claude Code's system prompt: only with
+     *  `instructionFiles: "dsh"` and in the default prompt mode, read when the Claude process starts
+     *  so a changed index reaches a session when its process next starts. Ignored under `isolate`, under
+     *  `systemPrompt: "dsh"`, for side calls and on a remote box. */
+    memoryIndex: boolean;
     /** dsh agent preset id → absolute path of a UTF-8 text file whose trimmed text is appended to
      *  Claude Code's system prompt in the default mode; unused under `systemPrompt: "dsh"`. */
     presetGuidance: Record<string, string>;
@@ -132,6 +137,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
     dshTools: z<boolean, boolean, "defined">;
     systemPrompt: z<"claude" | "dsh", "claude" | "dsh", "defined">;
     instructionFiles: z<"claude" | "dsh", "claude" | "dsh", "defined">;
+    memoryIndex: z<boolean, boolean, "defined">;
     presetGuidance: z<import("@deepseek-ai/cosmokit").Dict<string, string>, import("@deepseek-ai/cosmokit").Dict<string, string>, "defined">;
     enginePresets: z<string[], string[], "defined">;
     verbatimPrompts: z<boolean, boolean, "defined">;
@@ -190,6 +196,7 @@ export declare const Config: z<Schemastery.ObjectS<NoInfer<{
     dshTools: z<boolean, boolean, "defined">;
     systemPrompt: z<"claude" | "dsh", "claude" | "dsh", "defined">;
     instructionFiles: z<"claude" | "dsh", "claude" | "dsh", "defined">;
+    memoryIndex: z<boolean, boolean, "defined">;
     presetGuidance: z<import("@deepseek-ai/cosmokit").Dict<string, string>, import("@deepseek-ai/cosmokit").Dict<string, string>, "defined">;
     enginePresets: z<string[], string[], "defined">;
     verbatimPrompts: z<boolean, boolean, "defined">;

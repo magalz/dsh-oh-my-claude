@@ -64,6 +64,9 @@ export declare class ClaudeCodeAdapter extends LlmAdapter {
     /** Guidance files already reported unusable, so a missing or oversized file logs once per path
      *  and not every turn. */
     guidanceWarned: Set<string>;
+    /** Auto-memory indexes already reported unreadable, so a bad file logs once per path and not every
+     *  turn. */
+    memoryWarned: Set<string>;
     sessionController?: SessionController;
     /** Ids of the drain notices (`WAKE_TEXT`, `RECONNECT_TEXT`) still waiting in a session's inbox. Ids
      *  only: the agent is looked up when they are taken back, so an entry never keeps a session's
@@ -443,6 +446,10 @@ export declare class ClaudeCodeAdapter extends LlmAdapter {
      *  missing, unreadable, empty or oversized file is logged once per path, and the turn goes on
      *  without it. */
     private guidanceAt;
+    /** The block appending the workspace's auto-memory index, or undefined when the index contributes
+     *  nothing. A missing or empty index is the normal "no memory yet" case and logs nothing; any
+     *  other read problem is logged once per path, and the turn goes on without the index. */
+    private memoryIndexAt;
     /** Everything one turn needs: spawn args + spec for the long-lived process, and the stdin line for this turn. */
     prepare(options: GenerateOptions, { forceFresh }?: {
         forceFresh?: boolean;
@@ -532,6 +539,7 @@ export declare class ClaudeCodeAdapter extends LlmAdapter {
         dshTools: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         systemPrompt: import("@deepseek-ai/schemastery").default<"claude" | "dsh", "claude" | "dsh", "defined">;
         instructionFiles: import("@deepseek-ai/schemastery").default<"claude" | "dsh", "claude" | "dsh", "defined">;
+        memoryIndex: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         presetGuidance: import("@deepseek-ai/schemastery").default<import("@deepseek-ai/cosmokit").Dict<string, string>, import("@deepseek-ai/cosmokit").Dict<string, string>, "defined">;
         enginePresets: import("@deepseek-ai/schemastery").default<string[], string[], "defined">;
         verbatimPrompts: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
