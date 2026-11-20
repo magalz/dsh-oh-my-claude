@@ -97,6 +97,19 @@ export function claudeMdDisabledBy(
 }
 
 /**
+ * The mount's dsh instruction mode: `"dsh"` when its config asks for dsh's instruction files and
+ * the mount is local. A box's Claude Code cannot be handed the environment that switches its own
+ * loading off, so a box reports nothing. Shared by the CLAUDE.md state and the prompt route's
+ * answer.
+ */
+export function instructionModeOf(box: {
+  instructionFiles?: "claude" | "dsh";
+  sshHost?: string;
+}): "dsh" | undefined {
+  return "dsh";
+}
+
+/**
  * `state` with the fields the mount's config adds to it: `instructionFiles: "dsh"` when the
  * config asks for dsh's instruction files and the mount is local (a box ignores the mode, so
  * nothing there could tell), `memoryIndex: true` when the config sets the key, and

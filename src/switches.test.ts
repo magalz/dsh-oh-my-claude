@@ -4,6 +4,7 @@ import {
   claudeMdDisabledBy,
   DEFAULT_RETENTION_DAYS,
   featureSwitches,
+  instructionModeOf,
   withMountConfig,
 } from "./switches.js";
 
@@ -209,6 +210,20 @@ for (const days of [0, -5, 2.5, "30", null]) {
     chars: 0,
     instructionFiles: "dsh",
   });
+}
+
+// The instruction mode is a config fact, but a box's shell cannot be handed the environment that
+// switches Claude Code's own loading off, so only a local mount that asks for dsh's files reports
+// it; every other mount reports nothing.
+{
+  assert.equal(instructionModeOf({ instructionFiles: "dsh" }), "dsh");
+  assert.equal(
+    instructionModeOf({ instructionFiles: "dsh", sshHost: "box" }),
+    undefined,
+    "a box ignores the dsh instruction mode",
+  );
+  assert.equal(instructionModeOf({ instructionFiles: "claude" }), undefined);
+  assert.equal(instructionModeOf({}), undefined);
 }
 
 console.log("switches ok");
