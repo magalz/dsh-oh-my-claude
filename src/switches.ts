@@ -54,6 +54,13 @@ export interface ClaudeMdState {
   /** The settings scope that sets `CLAUDE_CODE_DISABLE_CLAUDE_MDS`, or `"env"` for the environment
    *  dsh itself runs in. Absent means the files load. No settings scope is called `env`. */
   disabledBy?: string;
+  /** The mount's `instructionFiles` config asks for dsh's files and the mount is local, so its
+   *  Claude Code loads none of its own. Absent for `claude`, for an unconfigured mount and for a
+   *  box, whose shell ignores the mode. */
+  instructionFiles?: "dsh";
+  /** The mount's `memoryIndex` config is on, so the plugin appends the workspace's auto-memory
+   *  index. Absent otherwise; the per-machine `memoryIndexOn` hint is not a config fact. */
+  memoryIndex?: true;
 }
 
 /**
@@ -86,14 +93,20 @@ export function claudeMdDisabledBy(
 }
 
 /**
- * Stub: the mount's config adds nothing yet, so the fields the cards need are never reported. The
- * two fields land in the next commit.
+ * `state` with the fields the mount's config adds to it: `instructionFiles: "dsh"` when the
+ * config asks for dsh's instruction files and the mount is local (a box ignores the mode, so
+ * nothing there could tell), and `memoryIndex: true` when the config sets the key. Neither field
+ * is written otherwise, so a card reads the field's presence as the config's answer; `files`,
+ * `chars` and `disabledBy` come back as they were.
  */
 export function withMountConfig(
   state: ClaudeMdState,
   box: { instructionFiles?: "claude" | "dsh"; memoryIndex?: boolean; sshHost?: string },
 ): ClaudeMdState {
-  return state;
+  const out = { ...state };
+  if (box.instructionFiles === "dsh" && !box.sshHost) out.instructionFiles = "dsh";
+  if (box.memoryIndex === true) out.memoryIndex = true;
+  return out;
 }
 
 /** One settings file read back as an object, or an empty one when it is not JSON. */

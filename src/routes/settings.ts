@@ -5,7 +5,12 @@ import { type RouteHandler, UNHANDLED } from "./context.js";
 import type { RouteCtx, SettingsScopeInfo } from "../sessions.js";
 import { listInstructions } from "../instructions.js";
 import { isMarketplaceSource, isPluginId, pluginRoster } from "../plugins.js";
-import { claudeMdDisabledBy, featureSwitches, type ClaudeMdState } from "../switches.js";
+import {
+  claudeMdDisabledBy,
+  featureSwitches,
+  type ClaudeMdState,
+  withMountConfig,
+} from "../switches.js";
 
 /** The settings group of the session routes, built once per registration. Returns `UNHANDLED` when no
  *  block matched, so the dispatch tries the next group; any other return means a block answered. */
@@ -263,7 +268,7 @@ export function settingsRoutes(c: RouteCtx): RouteHandler {
         !box.sshHost,
       );
       if (by !== undefined) state.disabledBy = by;
-      return json(res, 200, state);
+      return json(res, 200, withMountConfig(state, box));
     }
     return UNHANDLED;
   };

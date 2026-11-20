@@ -47,7 +47,12 @@ import {
 } from "./instruction-files.js";
 import { ISOLATED_ENV, engineConfigFor, engineDigest } from "./isolate.js";
 import { engineOverlay, presetOfSession, registerEnginePresets } from "./engine-mode.js";
-import { memoryIndexBlock, readMemoryIndex, usesMemoryIndex } from "./memory-index.js";
+import {
+  memoryIndexAsked,
+  memoryIndexBlock,
+  readMemoryIndex,
+  usesMemoryIndex,
+} from "./memory-index.js";
 import { guidancePathFor, readGuidanceFile, systemPromptDigest } from "./preset-guidance.js";
 import {
   type ClaudeEvent,
@@ -1811,7 +1816,14 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     // repository's project dir under claudeHome; a custom `autoMemoryDirectory` is not followed
     // (docs/configuration.md). Every problem means no block, never a failed turn.
     let memoryText: string | undefined;
-    if (usesMemoryIndex(cfg, dshInstructions, engineConfig.isolate, dshSystem)) {
+    if (
+      usesMemoryIndex(
+        { memoryIndex: memoryIndexAsked(cfg, hints) },
+        dshInstructions,
+        engineConfig.isolate,
+        dshSystem,
+      )
+    ) {
       try {
         const root = await repoRoot({}, cwd);
         memoryText = await this.memoryIndexAt(

@@ -11,6 +11,7 @@ import { parseChangelog } from "../changelog.js";
 import { unknownEffortLevels } from "../adapter/catalog.js";
 import {
   engineSendsDshPrompt,
+  markListed,
   presetOfSession,
   registeredEnginePresets,
 } from "../adapter/engine-mode.js";
@@ -107,7 +108,9 @@ export function statusRoutes(c: RouteCtx): RouteHandler {
       return json(res, 200, status);
     }
     // The agent presets a session can start under, for the engine-mode card: id and display name,
-    // broken ones left out. An empty list when this dsh mounts no preset service.
+    // broken ones left out. An empty list when this dsh mounts no preset service. A `?provider=`
+    // names the mount whose config lists presets, and those rows carry `listed: true`; a request
+    // without one, or with a provider this process has not mounted, answers as it always has.
     if (req.method === "GET" && url.pathname === `${ROUTE_PREFIX}/presets`) {
       const registry = c.ctx.get?.("agentPresets");
       if (!registry) return json(res, 200, { presets: [] });
@@ -116,7 +119,9 @@ export function statusRoutes(c: RouteCtx): RouteHandler {
         const presets = listed
           .filter((p) => !p.broken)
           .map((p) => ({ id: p.id, name: p.name ?? p.id }));
-        return json(res, 200, { presets });
+        return json(res, 200, {
+          presets: markListed(presets, registeredEnginePresets(url.searchParams.get("provider"))),
+        });
       } catch (e) {
         return json(res, 500, { error: errorText(e) });
       }

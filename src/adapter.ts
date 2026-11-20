@@ -327,6 +327,8 @@ export function apply(ctx: PluginContext, config: Schemastery.TypeT<typeof Confi
         command: other.config.command,
         sshHost: other.config.sshHost,
         systemPrompt: other.config.systemPrompt,
+        instructionFiles: other.config.instructionFiles,
+        memoryIndex: other.config.memoryIndex,
       };
     };
     registerUsageRoute(

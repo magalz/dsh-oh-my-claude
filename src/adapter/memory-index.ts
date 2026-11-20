@@ -36,14 +36,14 @@ export function usesMemoryIndex(
 }
 
 /**
- * Stub: the config's own key alone decides yet, so the per-machine switch has no effect. The
- * config-or-hint decision lands in the next commit.
+ * Whether this turn has the index asked for: the config's `memoryIndex`, or this machine's
+ * `memoryIndexOn` hint. The hint only adds, so a config `true` stays on whatever the hints hold.
  */
 export function memoryIndexAsked(
   config: { memoryIndex: boolean },
   hints: Record<string, boolean | number>,
 ): boolean {
-  return false;
+  return config.memoryIndex || hints[MEMORY_INDEX_ON_KEY] === true;
 }
 
 /** The block appended to Claude Code's prompt: a heading, one sentence naming the index file and
