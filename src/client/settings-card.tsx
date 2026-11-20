@@ -696,10 +696,12 @@ function useContextSizes(ctx: ClientCtx): Record<string, number> | null {
 /** What Claude Code loads for itself in this workspace, and whether anything turns it off. Read
  *  once beside the sizes, from the same open. The whole answer is worked out on the box: the count
  *  and total come from the files, and the on/off from that box's settings files plus, for a local
- *  box, dsh's own environment. With no Claude session open the default mount is asked, so the card
- *  still shows the config facts a fresh session would get. Null while it is in flight, on a card
- *  with no session behind it, or on a box whose server predates the route, and the row reads as
- *  loaded in all three: that is what a Claude Code session does on a fresh box. */
+ *  box, dsh's own environment. A non-Claude session falls back to the default mount, so the card
+ *  still shows the config facts a fresh session would get. With no session open at all there is no
+ *  cwd to ask about, so this read is skipped and the rows keep their loading defaults; only the
+ *  engine card, which needs no cwd, uses the default mount then. Null while it is in flight or on a
+ *  box whose server predates the route, and the row reads as loaded: that is what a Claude Code
+ *  session does on a fresh box. */
 function useClaudeMd(ctx: ClientCtx): ClaudeMdState | null {
   const [state, setState] = useState<ClaudeMdState | null>(null);
   const snap = ctx.sessions.list.getSnapshot();
@@ -1028,66 +1030,90 @@ const NO_ROWS: readonly string[] = [];
 
 const ROW_MASK_STYLE_ID = "dsh-oh-my-claude-context-rows";
 
-/** One `/system-prompt` answer: whether the turn sends dsh's own system prompt, and whether the
- *  mount forwards dsh's instruction block (the dsh instruction mode). */
+/** What `/system-prompt` answers: whose system prompt the session's turns send, and whether the
+ *  mount forwards dsh's instruction block for this workspace. */
 interface PromptAnswer {
+  /** Whether the turn sends dsh's own system prompt; false until the answer lands. */
   systemPrompt: boolean;
-  instructionFiles: boolean;
+  /** Whether the mount forwards dsh's instruction block in this workspace; undefined until the
+   *  workspace's first answer lands, and false after a failed read so the switches decide. */
+  instructionFiles: boolean | undefined;
 }
 
-/** Per mount and session, what its turns send: the mount's `systemPrompt: dsh`, or engine mode for
- *  the session's dsh mode, plus the mount's instruction mode. Dropped on `HINTS_EVENT`, since a mode
- *  ticked or cleared there moves its sessions in or out of engine mode. */
-const promptAnswers = new Map<string, Promise<PromptAnswer>>();
+/** Per provider and session, whether its turns send dsh's system prompt: the mount's
+ *  `systemPrompt: dsh`, or engine mode for the session's dsh mode. Dropped on `HINTS_EVENT` and
+ *  `SETTINGS_EVENT`, since a mode tick or a settings write can change it. */
+const promptModes = new Map<string, Promise<boolean>>();
 
-/** What session `sessionId` on mount `provider` sends, or undefined until the answer for this key
- *  lands, so a caller never applies the previous session's answer. Asked only once the session has
- *  rows (`started`): a blank session has no mode on the server yet, so an earlier answer would be
- *  the mount's alone. Re-read when the hints store changes, so ticking the session's mode for engine
- *  mode shows. A failed read answers with `instructionFiles: true`, the safe side for the row mask:
- *  a row kept one moment too long is a smaller mistake than hiding what Claude received. */
+/** Per provider and workspace, whether the mount forwards dsh's instruction block. The mode is
+ *  fixed for the mount's life, so a workspace's sessions share it and only its first chat open can
+ *  wait for the answer. Kept across hint changes; a successful read replaces a failed one. */
+const instructionModes = new Map<string, boolean>();
+
+/** What session `sessionId` on mount `provider` sends for the workspace at `cwd`: the per-session
+ *  system-prompt answer and the per-workspace instruction mode. The system-prompt answer is kept
+ *  with its key, so a tab that moves to another session never shows the last one's until its own
+ *  read lands; the instruction mode is read under its workspace key, so another workspace's answer
+ *  is never applied. Asked only once the session has rows (`started`): a blank session has no mode
+ *  on the server yet, so an earlier answer would be the mount's alone. Re-read when the hints store
+ *  changes and after a settings write. */
 function usePromptAnswer(
   provider: string | undefined,
   sessionId: string | undefined,
+  cwd: string,
   started: boolean,
-): PromptAnswer | undefined {
-  // The answer is kept with the key it is for, so a tab that moves to another session never shows
-  // the last one's until its own read lands.
-  const [answer, setAnswer] = useState<{ key: string; value: PromptAnswer } | undefined>();
+): PromptAnswer {
+  // The answer is kept with the key it is for (see above).
+  const [sent, setSent] = useState<{ key: string; value: boolean } | undefined>();
   const [reads, setReads] = useState(0);
-  const key = `${provider}\n${sessionId}`;
+  const modeKey = `${provider}\n${sessionId}`;
+  // The instruction mode is the workspace's, not the session's: sessions of one workspace share one
+  // answer, so only the first chat open there can show the row while it is pending.
+  const instructionKey = `${provider}\n${cwd}`;
   useEffect(() => {
     const changed = () => {
-      promptAnswers.clear();
+      promptModes.clear();
       setReads((n) => n + 1);
     };
     window.addEventListener(HINTS_EVENT, changed);
-    return () => window.removeEventListener(HINTS_EVENT, changed);
+    window.addEventListener(SETTINGS_EVENT, changed);
+    return () => {
+      window.removeEventListener(HINTS_EVENT, changed);
+      window.removeEventListener(SETTINGS_EVENT, changed);
+    };
   }, []);
   useEffect(() => {
     if (provider === undefined || sessionId === undefined || !started) return;
     let live = true;
-    let read = promptAnswers.get(key);
+    let read = promptModes.get(modeKey);
     if (read === undefined) {
-      const q = `provider=${encodeURIComponent(provider)}&session=${encodeURIComponent(sessionId)}`;
+      const onCwd = cwd ? `&cwd=${encodeURIComponent(cwd)}` : "";
+      const q =
+        `provider=${encodeURIComponent(provider)}&session=${encodeURIComponent(sessionId)}` + onCwd;
       read = fetch(`${ROUTE}/system-prompt?${q}`)
         .then((r) => readJson<{ mode?: string; instructionFiles?: "dsh" }>(r))
-        .then((r) => ({
-          systemPrompt: r.mode === "dsh",
-          instructionFiles: r.instructionFiles === "dsh",
-        }))
+        .then((r) => {
+          instructionModes.set(instructionKey, r.instructionFiles === "dsh");
+          return r.mode === "dsh";
+        })
         .catch(() => {
-          promptAnswers.delete(key);
-          return { systemPrompt: false, instructionFiles: true };
+          promptModes.delete(modeKey);
+          // A failed read follows the switches rather than promising a row Claude may not have
+          // received; the next hint or settings event retries.
+          instructionModes.set(instructionKey, false);
+          return false;
         });
-      promptAnswers.set(key, read);
+      promptModes.set(modeKey, read);
     }
-    void read.then((value) => live && setAnswer({ key, value }));
+    void read.then((value) => live && setSent({ key: modeKey, value }));
     return () => {
       live = false;
     };
-  }, [provider, sessionId, key, started, reads]);
-  return answer?.key === key ? answer.value : undefined;
+  }, [provider, sessionId, cwd, modeKey, instructionKey, started, reads]);
+  return {
+    systemPrompt: sent?.key === modeKey && sent.value,
+    instructionFiles: instructionModes.get(instructionKey),
+  };
 }
 
 /**
@@ -1118,10 +1144,14 @@ export function ContextRowMask({
   const nodes = useChat?.((chat) => chat.nodes);
   const mine = sessionId !== undefined && isClaudeSession(ctx, sessionId);
   const provider = sessionId === undefined ? undefined : claudeProviderOf(ctx, sessionId);
-  const promptAnswer = usePromptAnswer(provider, sessionId, order.length > 0);
-  const promptSent = promptAnswer?.systemPrompt === true;
-  // Unknown keeps the instruction row: only a definite non-dsh answer may let the switches hide it.
-  const instructionsForwarded = promptAnswer === undefined || promptAnswer.instructionFiles;
+  // The instruction mode follows the workspace, so name its cwd: a remote workspace runs the turn
+  // on a box and the answer then carries no mode.
+  const cwd = (sessionId ? ctx.sessions.list.getSnapshot()?.byId[sessionId]?.cwd : "") ?? "";
+  const promptAnswer = usePromptAnswer(provider, sessionId, cwd, order.length > 0);
+  const promptSent = promptAnswer.systemPrompt;
+  // Pending keeps the row for the first open of a workspace; a failed read and a definite answer
+  // follow the switches.
+  const instructionsForwarded = promptAnswer.instructionFiles ?? true;
   // The node map is a new object on every streamed chunk, and the walk below visits every row in
   // the conversation, so keying the memo on the map made a long turn quadratic in the length of
   // the transcript. What decides a row's masking is its source kind, fixed when the row is made,
@@ -1139,8 +1169,9 @@ export function ContextRowMask({
     });
     // The adapter forwards dsh's instruction block in the dsh instruction mode whatever the
     // switches say (`instructionDropsFor` in `src/adapter/instruction-files.ts`), so its row is a
-    // true receipt even while the box reads clear. While this session's answer is pending, keep it
-    // too: a row shown one moment too long is the safer mistake.
+    // true receipt even while the box reads clear. The workspace's first answer can still be
+    // pending; keeping the row until it lands is the safer mistake, and the cache makes it one
+    // flash per workspace.
     if (instructionsForwarded) drops.delete("instructions");
     return maskedRows(order, (key) => current.get(key), drops, promptSent);
   }, [mine, order, haveNodes, on, instructionsOff, skillsOff, promptSent, instructionsForwarded]);

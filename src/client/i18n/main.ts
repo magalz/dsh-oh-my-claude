@@ -1015,7 +1015,7 @@ export const zh = {
   "main.settingsUi.ctxMemoryIndexOff":
     "未加载：已设置 CLAUDE_CODE_DISABLE_CLAUDE_MDS，因此 Claude Code 不加载记忆索引，而插件只在 instructionFiles 设为 dsh 时追加它。",
   "main.settingsUi.ctxMemoryIndexDshPrompt":
-    "未追加：此挂载发送 dsh 自己的系统提示词，因此插件不附加记忆索引。",
+    "未追加：此挂载发送 dsh 自己的系统提示词，因此插件不追加记忆索引。",
   "main.settingsUi.whatDshWritesNeverSends": "dsh 记录但从不发送的内容",
   "main.settingsUi.ctxSystem": "dsh 系统提示",
   "main.settingsUi.ctxSystemWhy": "dsh 会把它记录在会话上，本插件从未把它传给 Claude Code。",

@@ -106,7 +106,7 @@ export function instructionModeOf(box: {
   instructionFiles?: "claude" | "dsh";
   sshHost?: string;
 }): "dsh" | undefined {
-  return "dsh";
+  return box.instructionFiles === "dsh" && !box.sshHost ? "dsh" : undefined;
 }
 
 /**
@@ -127,7 +127,8 @@ export function withMountConfig(
   },
 ): ClaudeMdState {
   const out = { ...state };
-  if (box.instructionFiles === "dsh" && !box.sshHost) out.instructionFiles = "dsh";
+  const instructionFiles = instructionModeOf(box);
+  if (instructionFiles !== undefined) out.instructionFiles = instructionFiles;
   if (box.memoryIndex === true) out.memoryIndex = true;
   if (box.systemPrompt === "dsh") out.systemPrompt = "dsh";
   return out;
