@@ -20,6 +20,18 @@ import { buildReport, type PrivateValues, type ReportInput } from "../report.js"
 import { repairsSummary } from "../session-heal.js";
 import { readSshToken, THIS_BOX } from "../ssh-login.js";
 import { STATE_DIR, loadSessionRepairs } from "../state.js";
+import { instructionModeOf } from "../switches.js";
+
+/** The `/system-prompt` answer: whose system prompt the session's turns send, plus the workspace's
+ *  dsh instruction mode when the request names a cwd. The row mask reads both from this cached
+ *  answer, so it never walks the instruction tree itself; `instructionModeOf` is the rule
+ *  `withMountConfig` uses for the CLAUDE.md state. */
+function promptAnswer(
+  mode: string,
+  instructionFiles: "dsh" | undefined,
+): { mode: string; instructionFiles?: "dsh" } {
+  return instructionFiles === undefined ? { mode } : { mode, instructionFiles };
+}
 
 /** The status group of the session routes, built once per registration. Returns `UNHANDLED` when no
  *  block matched, so the dispatch tries the next group; any other return means a block answered. */
@@ -131,15 +143,25 @@ export function statusRoutes(c: RouteCtx): RouteHandler {
     // session (`?session=`) in a mode ticked for engine mode or listed in the mount's
     // `enginePresets`, by that. The listed presets come from the mount the request names, which
     // registered them as it was constructed (engine-mode.ts), so this answer and the turn's overlay
-    // read one rule. No CLI is asked.
+    // read one rule. The same answer carries the workspace's dsh instruction mode, which the mask
+    // needs to keep dsh's instruction row when the adapter forwards it; a remote workspace or an
+    // ssh box reports none. No CLI is asked.
     if (req.method === "GET" && url.pathname === `${ROUTE_PREFIX}/system-prompt`) {
-      const own = boxOf(url).systemPrompt ?? "claude";
+      const box = boxOf(url);
+      const own = box.systemPrompt ?? "claude";
       const session = url.searchParams.get("session");
-      if (own === "dsh" || !session) return json(res, 200, { mode: own });
+      // The instruction mode follows the workspace the turn runs in, not just the named mount: a
+      // remote workspace or an ssh box runs the turn on a box, where the adapter does not set the
+      // mode (usesDshInstructions). Without a cwd the answer keeps its old shape and carries no
+      // instruction mode, so a client that does not send one is unaffected.
+      const cwd = url.searchParams.get("cwd");
+      const instructionFiles =
+        cwd === null ? undefined : instructionModeOf(targetOf(url, cwd).box);
+      if (own === "dsh" || !session) return json(res, 200, promptAnswer(own, instructionFiles));
       const hints = await readHints(join(STATE_DIR, "hints.json")).catch(() => ({}));
       const listed = registeredEnginePresets(url.searchParams.get("provider") ?? DEFAULT_PROVIDER);
       const sent = engineSendsDshPrompt(listed, hints, presetOfSession(c.ctx, session));
-      return json(res, 200, { mode: sent ? "dsh" : own });
+      return json(res, 200, promptAnswer(sent ? "dsh" : own, instructionFiles));
     }
     if (req.method === "GET" && url.pathname === `${ROUTE_PREFIX}/models`) {
       // `?all=1` is the Settings card's read: every mount's rows with their hide state, not the cut.

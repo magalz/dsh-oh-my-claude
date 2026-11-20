@@ -49,6 +49,17 @@ export interface ClaudeMdState {
     /** The settings scope that sets `CLAUDE_CODE_DISABLE_CLAUDE_MDS`, or `"env"` for the environment
      *  dsh itself runs in. Absent means the files load. No settings scope is called `env`. */
     disabledBy?: string;
+    /** The mount's `instructionFiles` config asks for dsh's files and the mount is local, so its
+     *  Claude Code loads none of its own. Absent for `claude`, for an unconfigured mount and for a
+     *  box, whose shell ignores the mode. */
+    instructionFiles?: "dsh";
+    /** The mount's `memoryIndex` config is on. Whether the index is appended still depends on
+     *  `instructionFiles: dsh`, a local spawn and the default prompt mode. Absent otherwise; the
+     *  per-machine `memoryIndexOn` hint is not a config fact. */
+    memoryIndex?: true;
+    /** The mount's `systemPrompt: "dsh"` config, so a card knows the plugin has no room to append
+     *  the memory index. Absent for the default `claude` prompt. */
+    systemPrompt?: "dsh";
 }
 /**
  * Whether anything turns CLAUDE.md loading off, and where it came from.
@@ -65,6 +76,30 @@ export interface ClaudeMdState {
  * from here, so the environment is not consulted for one at all.
  */
 export declare function claudeMdDisabledBy(scopes: readonly ScopeText[], env: string | undefined, local: boolean): string | undefined;
+/**
+ * The mount's dsh instruction mode: `"dsh"` when its config asks for dsh's instruction files and
+ * the mount is local. A box's Claude Code cannot be handed the environment that switches its own
+ * loading off, so a box reports nothing. Shared by the CLAUDE.md state and the prompt route's
+ * answer.
+ */
+export declare function instructionModeOf(box: {
+    instructionFiles?: "claude" | "dsh";
+    sshHost?: string;
+}): "dsh" | undefined;
+/**
+ * `state` with the fields the mount's config adds to it: `instructionFiles: "dsh"` when the
+ * config asks for dsh's instruction files and the mount is local (a box ignores the mode, so
+ * nothing there could tell), `memoryIndex: true` when the config sets the key, and
+ * `systemPrompt: "dsh"` when the mount sends dsh's own prompt. A field is not written otherwise,
+ * so a card reads the field's presence as the config's answer; `files`, `chars` and
+ * `disabledBy` come back as they were.
+ */
+export declare function withMountConfig(state: ClaudeMdState, box: {
+    instructionFiles?: "claude" | "dsh";
+    memoryIndex?: boolean;
+    systemPrompt?: "claude" | "dsh";
+    sshHost?: string;
+}): ClaudeMdState;
 /** One settings file read back as an object, or an empty one when it is not JSON. */
 export declare const parseSettings: (text: string) => Record<string, JsonValue>;
 /**

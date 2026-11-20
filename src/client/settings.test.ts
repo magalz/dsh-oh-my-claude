@@ -1,7 +1,15 @@
-// Offline checks for the settings scope note: precedence decides which file wins a key, a scope
-// missing from the payload is skipped rather than shifting the order, and unreadable text is quiet.
+// Offline checks for the settings pure helpers: precedence decides which file wins a key, a scope
+// missing from the payload is skipped rather than shifting the order, unreadable text is quiet, and
+// the two Settings cards read the server's config facts the way the adapter does.
 import assert from "node:assert/strict";
-import { overrideNote, type SettingsScopeInfo } from "./settings.js";
+import {
+  claudeMdReason,
+  memoryRowState,
+  overrideNote,
+  savableChars,
+  withListedPresets,
+  type SettingsScopeInfo,
+} from "./settings.js";
 
 const scope = (name: SettingsScopeInfo["scope"], text: string): SettingsScopeInfo => ({
   scope: name,
@@ -58,6 +66,96 @@ const scope = (name: SettingsScopeInfo["scope"], text: string): SettingsScopeInf
     "user",
   );
   assert.equal(note, "Overridden here: a, b and c by settings.local.json.");
+}
+
+// The plugin's config decides the CLAUDE.md row ahead of any settings file: the dsh instruction
+// mode loads none of these files whatever disabledBy says, and a plain loaded state names no reason.
+{
+  assert.equal(
+    claudeMdReason({ files: 2, chars: 30, disabledBy: "env", instructionFiles: "dsh" }),
+    "config",
+  );
+  assert.equal(claudeMdReason({ files: 2, chars: 30 }), undefined);
+  assert.equal(claudeMdReason({ files: 2, chars: 30, disabledBy: "env" }), "env");
+  assert.equal(claudeMdReason({ files: 2, chars: 30, disabledBy: "project" }), "project");
+}
+
+// The memory-index row is fixed where Claude Code loads the index itself or the config appends it,
+// and follows this machine's hint only in between.
+{
+  assert.deepEqual(memoryRowState({ files: 0, chars: 0 }, true), {
+    checked: true,
+    locked: true,
+    why: "native",
+  });
+  assert.deepEqual(memoryRowState({ files: 0, chars: 0 }, false), {
+    checked: true,
+    locked: true,
+    why: "native",
+  });
+  const config = { files: 0, chars: 0, instructionFiles: "dsh", memoryIndex: true } as const;
+  assert.deepEqual(memoryRowState(config, true), { checked: true, locked: true, why: "config" });
+  assert.deepEqual(memoryRowState(config, false), { checked: true, locked: true, why: "config" });
+  const bySwitch = { files: 0, chars: 0, instructionFiles: "dsh" } as const;
+  assert.deepEqual(memoryRowState(bySwitch, true), {
+    checked: true,
+    locked: false,
+    why: "switch",
+  });
+  assert.deepEqual(memoryRowState(bySwitch, false), {
+    checked: false,
+    locked: false,
+    why: "switch",
+  });
+}
+
+// The savings line counts only what the switch can withhold: in the dsh instruction mode the
+// instructions block is always forwarded, so only the skill catalog is counted there.
+{
+  assert.equal(savableChars({ instructions: 400, skills: 120 }, false), 520);
+  assert.equal(savableChars({ instructions: 400, skills: 120 }, true), 120);
+  assert.equal(savableChars({ skills: 120 }, true), 120);
+  assert.equal(savableChars({ instructions: 400 }, false), 400);
+  assert.equal(savableChars({ instructions: 400 }, true), undefined);
+  assert.equal(savableChars({}, false), undefined);
+  assert.equal(savableChars(null, false), undefined);
+}
+
+// Outside the dsh instruction mode a settings scope or dsh's environment can switch Claude Code's
+// own loading off; then nothing loads the index, and the plugin appends it only in that mode.
+{
+  const off = { checked: false, locked: true, why: "off" };
+  assert.deepEqual(memoryRowState({ files: 2, chars: 30, disabledBy: "env" }, false), off);
+  assert.deepEqual(memoryRowState({ files: 2, chars: 30, disabledBy: "env" }, true), off);
+  assert.deepEqual(memoryRowState({ files: 2, chars: 30, disabledBy: "project" }, true), off);
+}
+
+// The dsh system prompt leaves the plugin no place to append the index, so the row says that even
+// when the config or this machine asks for it.
+{
+  const dshPrompt = { checked: false, locked: true, why: "dshPrompt" };
+  const state = { files: 0, chars: 0, instructionFiles: "dsh", systemPrompt: "dsh" } as const;
+  assert.deepEqual(memoryRowState(state, false), dshPrompt);
+  assert.deepEqual(memoryRowState(state, true), dshPrompt);
+  assert.deepEqual(memoryRowState({ ...state, memoryIndex: true }, true), dshPrompt);
+}
+
+// The engine card counts a listed preset as ticked without a tick in the store: the listed ids come
+// after the ticked ones in row order, and a preset that is both is named once.
+{
+  const rows = [
+    { id: "standard" },
+    { id: "crew", listed: true },
+    { id: "engine", listed: true },
+  ] as const;
+  assert.deepEqual(withListedPresets(["standard"], rows), ["standard", "crew", "engine"]);
+  assert.deepEqual(withListedPresets(["engine"], rows), ["engine", "crew"]);
+  assert.deepEqual(withListedPresets(["crew"], rows), ["crew", "engine"]);
+  assert.deepEqual(
+    withListedPresets(["standard"], rows.map(({ id }) => ({ id }))),
+    ["standard"],
+    "nothing listed leaves the ticks as they were",
+  );
 }
 
 console.log("settings-scopes ok");

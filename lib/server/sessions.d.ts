@@ -725,6 +725,10 @@ export interface MountBox {
     sshHost?: string;
     /** The mount's `systemPrompt` config; absent reads as `claude`, the default. */
     systemPrompt?: "claude" | "dsh";
+    /** The mount's `instructionFiles` config; absent reads as `claude`, the default. */
+    instructionFiles?: "claude" | "dsh";
+    /** The mount's `memoryIndex` config; absent reads as `false`, the default. */
+    memoryIndex?: boolean;
 }
 /**
  * That box's `~/.claude`, where its user-scope CLAUDE.md and settings both live. A mount's
