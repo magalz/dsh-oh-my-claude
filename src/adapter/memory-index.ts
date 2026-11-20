@@ -11,6 +11,11 @@ import { isEnoent } from "../remote-fs.js";
  *  line boundary; when not even its first line fits, only the notice is sent. */
 export const MEMORY_INDEX_MAX_BYTES = 6 * 1024;
 
+/** Hints-store key of the per-machine memory-index switch: `memoryIndexOn`. The config's
+ *  `memoryIndex` is the base; this adds to it on one machine and never takes a config `true`
+ *  away. */
+export const MEMORY_INDEX_ON_KEY = "memoryIndexOn";
+
 /** What one memory-index read produced. A missing or empty index is `{ ok: false }` with no
  *  problem: "no memory yet" is normal, and only a real read error is worth a log line. */
 export type MemoryIndexRead = { ok: true; text: string } | { ok: false; problem?: string };
@@ -28,6 +33,17 @@ export function usesMemoryIndex(
   dshSystem: string | undefined,
 ): boolean {
   return config.memoryIndex && usesDsh && !isolated && dshSystem === undefined;
+}
+
+/**
+ * Stub: the config's own key alone decides yet, so the per-machine switch has no effect. The
+ * config-or-hint decision lands in the next commit.
+ */
+export function memoryIndexAsked(
+  config: { memoryIndex: boolean },
+  hints: Record<string, boolean | number>,
+): boolean {
+  return false;
 }
 
 /** The block appended to Claude Code's prompt: a heading, one sentence naming the index file and

@@ -85,6 +85,17 @@ export function claudeMdDisabledBy(
   return local && cliTrue(env) ? "env" : undefined;
 }
 
+/**
+ * Stub: the mount's config adds nothing yet, so the fields the cards need are never reported. The
+ * two fields land in the next commit.
+ */
+export function withMountConfig(
+  state: ClaudeMdState,
+  box: { instructionFiles?: "claude" | "dsh"; memoryIndex?: boolean; sshHost?: string },
+): ClaudeMdState {
+  return state;
+}
+
 /** One settings file read back as an object, or an empty one when it is not JSON. */
 export const parseSettings = (text: string): Record<string, JsonValue> => {
   try {

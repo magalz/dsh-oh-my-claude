@@ -39,6 +39,17 @@ export function matchesEnginePreset(
   );
 }
 
+/**
+ * Stub: nothing is marked yet, so a config-listed preset reads as unlisted. The marking lands in
+ * the next commit.
+ */
+export function markListed<T extends { id: string }>(
+  rows: readonly T[],
+  listed: readonly string[],
+): (T & { listed?: true })[] {
+  return [];
+}
+
 /** The config keys engine mode sets, in the order Settings lists them. */
 export const ENGINE_OPTIONS = [
   "systemPrompt",
