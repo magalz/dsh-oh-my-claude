@@ -1,6 +1,7 @@
 // The settings scopes the editor in index.tsx switches between, and the note it shows when a
 // higher-precedence file overrides what you are looking at. Pure: no fetch, no DOM.
 import { t } from "./i18n.js";
+import type { ClaudeMdState } from "../switches.js";
 
 /** The settings files the CLI merges, highest precedence first. */
 /**
@@ -84,4 +85,46 @@ export function overrideNote(scopes: readonly SettingsScopeInfo[], scope: Settin
   return clauses.length === 0
     ? ""
     : t("settings.overridden", { clauses: clauses.join(t("settings.clauseSep")) });
+}
+
+/** Why Claude Code's own CLAUDE.md files reach a session or not: the plugin's config in the dsh
+ *  instruction mode, `"env"` for dsh's own environment, a settings scope that sets the disable
+ *  variable, or undefined when the files load. */
+export type ClaudeMdReason = "config" | "env" | SettingsScope;
+
+/** The reason the CLAUDE.md row states for `state`. The plugin's config comes first: in the dsh
+ *  instruction mode Claude Code loads none of these files whatever a settings file says, and the row
+ *  would otherwise credit the environment or a scope for a decision the config made. */
+export function claudeMdReason(
+  _state: ClaudeMdState | null | undefined,
+): ClaudeMdReason | undefined {
+  return undefined;
+}
+
+/** The memory-index row's three states: fixed on because Claude Code loads the index itself, fixed
+ *  on because the plugin's config appends it, or a switch-backed box. */
+export interface MemoryRowState {
+  checked: boolean;
+  locked: boolean;
+  why: "native" | "config" | "switch";
+}
+
+/** What the memory-index row shows for `state` and this machine's `memoryIndexOn` hint. The hint
+ *  only moves the box in the dsh instruction mode without the config's `memoryIndex`: there Claude
+ *  Code no longer loads the index and the plugin can append it. */
+export function memoryRowState(
+  _state: ClaudeMdState | null | undefined,
+  _hintOn: boolean,
+): MemoryRowState {
+  return { checked: false, locked: false, why: "native" };
+}
+
+/** The preset ids ticked in the hints store plus the presets the plugin's config lists, the listed
+ *  ones in `rows` order after the ticked ones and every id once. A listed preset runs in engine mode
+ *  whether or not it was ticked, so the card counts it like a tick. */
+export function withListedPresets(
+  ticked: readonly string[],
+  _rows: readonly { id: string; listed?: true }[],
+): string[] {
+  return [...ticked];
 }
