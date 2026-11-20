@@ -1,5 +1,6 @@
-// The settings scopes the editor in index.tsx switches between, and the note it shows when a
-// higher-precedence file overrides what you are looking at. Pure: no fetch, no DOM.
+// The settings scopes the editor in index.tsx switches between, the note it shows when a
+// higher-precedence file overrides what you are looking at, and the decisions the two Settings cards
+// draw from the server's answers. Pure: no fetch, no DOM.
 import { t } from "./i18n.js";
 import type { ClaudeMdState } from "../switches.js";
 
@@ -96,9 +97,13 @@ export type ClaudeMdReason = "config" | "env" | SettingsScope;
  *  instruction mode Claude Code loads none of these files whatever a settings file says, and the row
  *  would otherwise credit the environment or a scope for a decision the config made. */
 export function claudeMdReason(
-  _state: ClaudeMdState | null | undefined,
+  state: ClaudeMdState | null | undefined,
 ): ClaudeMdReason | undefined {
-  return undefined;
+  if (state?.instructionFiles === "dsh") return "config";
+  const by = state?.disabledBy;
+  if (by === undefined) return undefined;
+  const scope = SETTINGS_SCOPES.find((s) => s === by);
+  return scope === undefined ? "env" : scope;
 }
 
 /** The memory-index row's three states: fixed on because Claude Code loads the index itself, fixed
@@ -113,10 +118,12 @@ export interface MemoryRowState {
  *  only moves the box in the dsh instruction mode without the config's `memoryIndex`: there Claude
  *  Code no longer loads the index and the plugin can append it. */
 export function memoryRowState(
-  _state: ClaudeMdState | null | undefined,
-  _hintOn: boolean,
+  state: ClaudeMdState | null | undefined,
+  hintOn: boolean,
 ): MemoryRowState {
-  return { checked: false, locked: false, why: "native" };
+  if (state?.instructionFiles !== "dsh") return { checked: true, locked: true, why: "native" };
+  if (state.memoryIndex === true) return { checked: true, locked: true, why: "config" };
+  return { checked: hintOn, locked: false, why: "switch" };
 }
 
 /** The preset ids ticked in the hints store plus the presets the plugin's config lists, the listed
@@ -124,7 +131,14 @@ export function memoryRowState(
  *  whether or not it was ticked, so the card counts it like a tick. */
 export function withListedPresets(
   ticked: readonly string[],
-  _rows: readonly { id: string; listed?: true }[],
+  rows: readonly { id: string; listed?: true }[],
 ): string[] {
-  return [...ticked];
+  const ids = [...new Set(ticked)];
+  const seen = new Set(ids);
+  for (const row of rows) {
+    if (row.listed !== true || seen.has(row.id)) continue;
+    seen.add(row.id);
+    ids.push(row.id);
+  }
+  return ids;
 }

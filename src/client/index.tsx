@@ -311,7 +311,7 @@ export function apply(ctx: ClientCtx) {
             a switch's question, not a number's. Terminal mirror stays last, on its own, because it
             is the one experiment here. */}
         <ContextSwitch ctx={ctx} />
-        <EngineModeCard />
+        <EngineModeCard ctx={ctx} />
         <ReturnRecapSwitch />
         <SpendGuardField />
         <ProxyFirstPartySwitch />

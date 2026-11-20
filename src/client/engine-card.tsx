@@ -3,8 +3,17 @@
 // store, under the keys `src/adapter/engine-mode.ts` reads on every turn.
 import { useEffect, useState } from "react";
 import { t, useLocale } from "./i18n.js";
-import { ROUTE, T, nested, readJson } from "./shared.js";
+import {
+  ROUTE,
+  T,
+  nested,
+  readJson,
+  claudeProviderOf,
+  openSessionId,
+  type ClientCtx,
+} from "./shared.js";
 import { HINTS_EVENT, loadHints, useHintFlag } from "./hints.js";
+import { withListedPresets } from "./settings.js";
 import { Switch } from "./switch.js";
 import {
   ENGINE_ON_KEY,
@@ -14,10 +23,12 @@ import {
   type EngineOption,
 } from "../adapter/engine-mode.js";
 
-/** One preset as the `/presets` route lists it. */
+/** One preset as the `/presets` route lists it. `listed` marks a preset the mount's
+ *  `enginePresets` config names, so it runs in engine mode whatever the hints store says. */
 interface PresetRow {
   id: string;
   name: string;
+  listed?: true;
 }
 
 /** Each engine option's label and hint, in the order Settings lists them. */
@@ -57,9 +68,12 @@ function builtInName(id: string): string | undefined {
 }
 
 /** One preset's checkbox; ticked means sessions started in that mode run Claude as dsh's engine.
- *  A ticked mode shows its own folded "What it changes" set right under it. */
+ *  A ticked mode shows its own folded "What it changes" set right under it. A preset the plugin's
+ *  config lists is ticked and disabled: its sessions run in engine mode whatever the store holds. */
 function PresetBox({ preset }: { preset: PresetRow }) {
   const [on, setOn] = useHintFlag(ENGINE_PRESET_PREFIX + preset.id);
+  const always = preset.listed === true;
+  const ticked = on || always;
   const name = builtInName(preset.id) ?? preset.name;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -67,13 +81,19 @@ function PresetBox({ preset }: { preset: PresetRow }) {
         <input
           type="checkbox"
           data-omc-engine-preset={preset.id}
-          checked={on}
+          checked={ticked}
+          disabled={always}
           onChange={(e) => setOn(e.target.checked)}
         />
         {name}
         {name !== preset.id && <span style={{ color: T.faint, fontSize: 12 }}>{preset.id}</span>}
       </label>
-      {on && (
+      {always && (
+        <span style={{ color: T.faint, fontSize: 12, marginLeft: 24 }}>
+          {t("main.settingsUi.engineListedWhy")}
+        </span>
+      )}
+      {ticked && (
         <details data-omc-engine-options={preset.id} style={{ ...nested, marginLeft: 24 }}>
           <summary style={{ cursor: "pointer", color: T.muted, fontSize: 12 }}>
             {t("main.settingsUi.engineOptions")}
@@ -148,26 +168,38 @@ function useTickedPresets(): Set<string> {
  * go stale under an open Settings. A preset that is gone drops off the list and the summary; its
  * tick stays in the store, so a preset that comes back under the same id is in engine mode again.
  * The ticks are hints-store flags and follow a change made in another tab. Undefined presets (the
- * read failed, or this dsh has no preset service) show a one-line note.
+ * read failed, or this dsh has no preset service) show a one-line note. A preset the mount's
+ * `enginePresets` config lists comes back marked: it counts as a mode and its box is fixed on, and
+ * one line under the description names it even while the master switch is off, since those sessions
+ * run in engine mode regardless.
  */
-export function EngineModeCard() {
+export function EngineModeCard({ ctx }: { ctx: ClientCtx }) {
   useLocale();
   const [presets, setPresets] = useState<PresetRow[] | undefined>();
   const [reads, setReads] = useState(0);
+  // The status route marks a preset only when the request names the session's mount, so the
+  // provider travels with the read, the way the CLAUDE.md row asks for it.
+  const id = openSessionId(ctx);
+  const provider = id === undefined ? "" : (claudeProviderOf(ctx, id) ?? "");
   useEffect(() => {
     let live = true;
-    fetch(`${ROUTE}/presets`)
+    const onBox = provider ? `?provider=${encodeURIComponent(provider)}` : "";
+    fetch(`${ROUTE}/presets${onBox}`)
       .then((r) => readJson<{ presets?: PresetRow[] }>(r))
       .then((r) => live && setPresets(r.presets ?? []))
       .catch(() => live && setPresets([]));
     return () => {
       live = false;
     };
-  }, [reads]);
+  }, [reads, provider]);
   const [on, setOn] = useHintFlag(ENGINE_ON_KEY);
   const ticked = useTickedPresets();
+  const allTicked = withListedPresets([...ticked], presets ?? []);
   const tickedNames = (presets ?? [])
-    .filter((p) => ticked.has(p.id))
+    .filter((p) => allTicked.includes(p.id))
+    .map((p) => builtInName(p.id) ?? p.name);
+  const listedNames = (presets ?? [])
+    .filter((p) => p.listed === true)
     .map((p) => builtInName(p.id) ?? p.name);
   return (
     <>
@@ -185,6 +217,13 @@ export function EngineModeCard() {
         <div>
           <div>{t("main.settingsUi.engineTitle")}</div>
           <div style={{ color: T.faint, fontSize: 12 }}>{t("main.settingsUi.engineDesc")}</div>
+          {listedNames.length > 0 && (
+            <div data-omc-engine-listed="" style={{ color: T.faint, fontSize: 12 }}>
+              {t("main.settingsUi.engineListed", {
+                names: listedNames.join(t("main.settingsUi.engineModesJoin")),
+              })}
+            </div>
+          )}
         </div>
         <Switch on={on} onChange={setOn} label={t("main.settingsUi.engineTitle")} />
       </div>

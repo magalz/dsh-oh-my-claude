@@ -346,6 +346,8 @@ export const en = {
     "Off: CLAUDE_CODE_DISABLE_CLAUDE_MDS is set in the environment dsh runs in, not in any settings file.",
   "main.settingsUi.claudeMdOffScope":
     "Off: {scope} sets CLAUDE_CODE_DISABLE_CLAUDE_MDS. Nothing from these files reaches the session, since the copy dsh sends is dropped too.",
+  "main.settingsUi.claudeMdOffConfig":
+    "Off: the plugin's config sets instructionFiles to dsh. Claude Code loads none of these files, and dsh's own instruction files are sent instead.",
   "main.settingsUi.filesOne": "{n} file · ",
   "main.settingsUi.filesOther": "{n} files · ",
   "main.settingsUi.chars": "{n} chars",
@@ -357,6 +359,8 @@ export const en = {
   "main.settingsUi.aTurnGoingBy": " a turn, going by the last turn in this workspace.",
   "main.settingsUi.whatDshAdds": "What dsh adds",
   "main.settingsUi.ctxInstructions": "Workspace instructions (AGENTS.md)",
+  "main.settingsUi.ctxInstructionsDsh":
+    "Always sent in the dsh instruction mode: it is the only instruction text Claude gets.",
   "main.settingsUi.ctxSkills": "dsh skill catalog",
   "main.settingsUi.ctxRuntime": "Runtime snapshot (file and approval policy)",
   "main.settingsUi.ctxRuntimeWhy":
@@ -366,6 +370,12 @@ export const en = {
     "Follows the dshTools setting in the plugin config, not this card.",
   "main.settingsUi.whatClaudeLoads": "What Claude Code loads on its own",
   "main.settingsUi.ctxClaudeMd": "Your CLAUDE.md files",
+  "main.settingsUi.ctxMemoryIndex": "Your memory index (MEMORY.md)",
+  "main.settingsUi.ctxMemoryIndexNative": "Claude Code loads it itself.",
+  "main.settingsUi.ctxMemoryIndexConfig":
+    "On in the plugin's config: the plugin appends it when a session's Claude process starts, since Claude Code no longer loads it.",
+  "main.settingsUi.ctxMemoryIndexSwitch":
+    "Claude Code no longer loads it in this mode. Tick this and the plugin appends it when a session's Claude process starts.",
   "main.settingsUi.whatDshWritesNeverSends": "What dsh writes down but never sends",
   "main.settingsUi.ctxSystem": "dsh system prompt",
   "main.settingsUi.ctxSystemWhy":
@@ -375,6 +385,10 @@ export const en = {
   "main.settingsUi.engineTitle": "Claude as dsh's engine",
   "main.settingsUi.engineDesc":
     "Sessions started in a mode you tick run Claude Code as the model only: dsh's prompt and tools, none of your Claude Code settings. Every other session stays as it is. A session in one of these modes picks a change up on its next turn.",
+  "main.settingsUi.engineListed":
+    "Always in engine mode from the plugin's config: {names}",
+  "main.settingsUi.engineListedWhy":
+    "Always on: the plugin's config lists this mode in enginePresets.",
   "main.settingsUi.enginePresets": "Modes that use it",
   "main.settingsUi.engineNoPresets": "This dsh lists no modes.",
   "main.settingsUi.engineModeStandard": "Standard mode",
@@ -966,6 +980,8 @@ export const zh = {
     "已关闭：CLAUDE_CODE_DISABLE_CLAUDE_MDS 设置在 dsh 运行的环境中，而不在任何设置文件里。",
   "main.settingsUi.claudeMdOffScope":
     "已关闭：{scope} 设置了 CLAUDE_CODE_DISABLE_CLAUDE_MDS。这些文件的内容不会进入会话，因为 dsh 发送的副本也被丢弃了。",
+  "main.settingsUi.claudeMdOffConfig":
+    "已关闭：插件配置把 instructionFiles 设为 dsh。Claude Code 不加载这些文件，改为发送 dsh 自己的说明文件。",
   "main.settingsUi.filesOne": "{n} 个文件 · ",
   "main.settingsUi.filesOther": "{n} 个文件 · ",
   "main.settingsUi.chars": "{n} 字符",
@@ -977,6 +993,8 @@ export const zh = {
   "main.settingsUi.aTurnGoingBy": " 每轮，按本工作区最近一轮计算。",
   "main.settingsUi.whatDshAdds": "dsh 添加的内容",
   "main.settingsUi.ctxInstructions": "工作区说明（AGENTS.md）",
+  "main.settingsUi.ctxInstructionsDsh":
+    "在 dsh 说明文件模式下始终发送：这是 Claude 唯一能收到的说明文本。",
   "main.settingsUi.ctxSkills": "dsh 技能目录",
   "main.settingsUi.ctxRuntime": "运行时快照（文件与审批策略）",
   "main.settingsUi.ctxRuntimeWhy": "始终发送。没有它，会话会请求被自动拒绝的审批。",
@@ -984,6 +1002,12 @@ export const zh = {
   "main.settingsUi.ctxToolsWhy": "遵循插件配置中的 dshTools 设置，而非此卡片。",
   "main.settingsUi.whatClaudeLoads": "Claude Code 自行加载的内容",
   "main.settingsUi.ctxClaudeMd": "你的 CLAUDE.md 文件",
+  "main.settingsUi.ctxMemoryIndex": "你的记忆索引（MEMORY.md）",
+  "main.settingsUi.ctxMemoryIndexNative": "Claude Code 会自行加载。",
+  "main.settingsUi.ctxMemoryIndexConfig":
+    "已在插件配置中开启：会话的 Claude 进程启动时由插件追加，因为 Claude Code 不再加载它。",
+  "main.settingsUi.ctxMemoryIndexSwitch":
+    "此模式下 Claude Code 不再加载它。勾选后，会话的 Claude 进程启动时由插件追加。",
   "main.settingsUi.whatDshWritesNeverSends": "dsh 记录但从不发送的内容",
   "main.settingsUi.ctxSystem": "dsh 系统提示",
   "main.settingsUi.ctxSystemWhy": "dsh 会把它记录在会话上，本插件从未把它传给 Claude Code。",
@@ -992,6 +1016,8 @@ export const zh = {
   "main.settingsUi.engineTitle": "Claude 作为 dsh 的引擎",
   "main.settingsUi.engineDesc":
     "在你勾选的模式下新建的会话，只把 Claude Code 当作模型使用：用 dsh 的提示词和工具，不读你的 Claude Code 设置。其他会话保持不变。这些模式下的会话会在下一轮应用改动。",
+  "main.settingsUi.engineListed": "插件配置指定始终使用引擎模式：{names}",
+  "main.settingsUi.engineListedWhy": "始终开启：插件配置的 enginePresets 列出了此模式。",
   "main.settingsUi.enginePresets": "使用它的模式",
   "main.settingsUi.engineNoPresets": "此 dsh 没有可用的模式。",
   "main.settingsUi.engineModeStandard": "标准模式",

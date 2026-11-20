@@ -41,7 +41,13 @@ import { type BoxRoute, RouteLine, routeNote } from "./route-line.js";
 import { Switch } from "./switch.js";
 import type { ToolMode, ToolModeInfo } from "../rows-probe.js";
 import { RECAP_AWAY_MS, RECAP_AWAY_CHOICES, recapAwayIn } from "./notices.js";
-import { SETTINGS_SCOPES, SCOPE_LABELS } from "./settings.js";
+import {
+  SCOPE_LABELS,
+  claudeMdReason,
+  memoryRowState,
+  type ClaudeMdReason,
+  type MemoryRowState,
+} from "./settings.js";
 // Type only, so nothing from the server half reaches the bundle: the row renders what the route
 // answered, and the route is the only thing that knows how to work the answer out.
 import type { ClaudeMdState } from "../switches.js";
@@ -687,19 +693,21 @@ function useContextSizes(ctx: ClientCtx): Record<string, number> | null {
 /** What Claude Code loads for itself in this workspace, and whether anything turns it off. Read
  *  once beside the sizes, from the same open. The whole answer is worked out on the box: the count
  *  and total come from the files, and the on/off from that box's settings files plus, for a local
- *  box, dsh's own environment. Null while it is in flight, on a card with no session behind it, or
+ *  box, dsh's own environment. `sessionId` names the session to ask for (the open one by default),
+ *  so the chat's row mask asks for the one it draws; `enabled` lets that caller skip the read for a
+ *  session on another provider. Null while it is in flight, on a card with no session behind it, or
  *  on a box whose server predates the route, and the row reads as loaded in all three: that is what
  *  a Claude Code session does on a fresh box. */
-function useClaudeMd(ctx: ClientCtx): ClaudeMdState | null {
+function useClaudeMd(ctx: ClientCtx, sessionId?: string, enabled = true): ClaudeMdState | null {
   const [state, setState] = useState<ClaudeMdState | null>(null);
   const snap = ctx.sessions.list.getSnapshot();
-  const id = openSessionId(ctx) ?? "";
+  const id = sessionId ?? openSessionId(ctx) ?? "";
   const cwd = (id ? snap?.byId[id]?.cwd : "") ?? "";
   // A second account or a named ssh box keeps its own settings files, so the box has to be named;
   // `cwd` alone resolves a remote workspace but not which instance the session is bound to.
   const provider = id ? (claudeProviderOf(ctx, id) ?? "") : "";
   useEffect(() => {
-    if (!cwd) return;
+    if (!cwd || !enabled) return;
     let live = true;
     const run = async () => {
       const onBox = provider ? `&provider=${encodeURIComponent(provider)}` : "";
@@ -717,22 +725,22 @@ function useClaudeMd(ctx: ClientCtx): ClaudeMdState | null {
       live = false;
       window.removeEventListener(SETTINGS_EVENT, again);
     };
-  }, [cwd, provider]);
+  }, [cwd, provider, enabled]);
   return state;
 }
 
 /** The sentence beside the CLAUDE.md row. Long only where it has to be: almost nobody disables
  *  these files, so the loaded state says the one thing a reader needs and the off states, which are
- *  the ones worth acting on, name the variable and where it was set. The key is named rather than
- *  linked on purpose: the settings editor below this card is mounted once per box, so a jump would
- *  have to guess which, and the name is greppable on a box this panel is not open on. */
-function claudeMdWhy(state: ClaudeMdState | null): string {
-  const by = state?.disabledBy;
-  if (by === undefined) return t("main.settingsUi.claudeMdLoaded");
-  const scope = SETTINGS_SCOPES.find((s) => s === by);
-  return scope === undefined
-    ? t("main.settingsUi.claudeMdOffEnv")
-    : t("main.settingsUi.claudeMdOffScope", { scope: SCOPE_LABELS[scope] });
+ *  the ones worth acting on, name the variable and where it was set. The plugin's config comes
+ *  first: in its dsh instruction mode Claude Code loads none of these files, and the sentence says
+ *  what is sent instead. The key is named rather than linked on purpose: the settings editor below
+ *  this card is mounted once per box, so a jump would have to guess which, and the name is
+ *  greppable on a box this panel is not open on. */
+function claudeMdWhy(reason: ClaudeMdReason | undefined): string {
+  if (reason === "config") return t("main.settingsUi.claudeMdOffConfig");
+  if (reason === undefined) return t("main.settingsUi.claudeMdLoaded");
+  if (reason === "env") return t("main.settingsUi.claudeMdOffEnv");
+  return t("main.settingsUi.claudeMdOffScope", { scope: SCOPE_LABELS[reason] });
 }
 
 /** One measured size, beside the row it belongs to. Thousands are rounded to one decimal because
@@ -835,6 +843,55 @@ function ContextFixed({
   );
 }
 
+/** The per-machine memory-index hint. Mirrors `MEMORY_INDEX_ON_KEY` in
+ *  `src/adapter/memory-index.ts`; that module reads the index from disk, so the browser half repeats
+ *  the key instead of importing it. */
+const MEMORY_INDEX_HINT = "memoryIndexOn";
+
+/** The memory-index row: fixed where Claude Code loads the index itself or the plugin's config
+ *  appends it, and a switch in between. Not a `ContextFixed` row there: that component promises it
+ *  is backed by no hint key, and this one is. */
+function ContextMemoryRow({
+  state,
+  onChange,
+}: {
+  state: MemoryRowState;
+  onChange: (on: boolean) => void;
+}) {
+  const label = t("main.settingsUi.ctxMemoryIndex");
+  if (state.locked) {
+    return (
+      <ContextFixed
+        source="memory"
+        label={label}
+        why={
+          state.why === "config"
+            ? t("main.settingsUi.ctxMemoryIndexConfig")
+            : t("main.settingsUi.ctxMemoryIndexNative")
+        }
+        chars={undefined}
+        checked={state.checked}
+      />
+    );
+  }
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+      <input
+        type="checkbox"
+        data-omc-context="memory"
+        checked={state.checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>
+        {label}
+        <span style={{ color: T.faint, fontSize: 12 }}>
+          : {t("main.settingsUi.ctxMemoryIndexSwitch")}
+        </span>
+      </span>
+    </label>
+  );
+}
+
 /** What dsh adds to every prompt besides what the owner typed: the master switch, then a fold with
  *  one checkbox per block the plugin can withhold and one disabled row per block it cannot. The
  *  keys go to the box's hints store, and the adapter reads them when it assembles a turn, so a
@@ -845,6 +902,10 @@ export function ContextSwitch({ ctx }: { ctx: ClientCtx }) {
   const off = !on;
   const sizes = useContextSizes(ctx);
   const claudeMd = useClaudeMd(ctx);
+  const mdReason = claudeMdReason(claudeMd);
+  const dshInstructions = mdReason === "config";
+  const [memoryOn, setMemoryOn] = useHintFlag(MEMORY_INDEX_HINT);
+  const memory = memoryRowState(claudeMd, memoryOn);
   // The two switchable blocks and nothing else. The runtime snapshot, the tools guidance and the
   // CLAUDE.md copy are all still sent (or already dropped) whatever this switch says, so counting
   // them here would promise a saving the switch cannot deliver.
@@ -890,12 +951,21 @@ export function ContextSwitch({ ctx }: { ctx: ClientCtx }) {
             style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 0 0 16px" }}
           >
             <div style={{ color: T.muted, fontSize: 12 }}>{t("main.settingsUi.whatDshAdds")}</div>
-            <ContextBox
-              source="instructions"
-              flag={OFF_KEY.instructions}
-              label={t("main.settingsUi.ctxInstructions")}
-              chars={sizes?.instructions}
-            />
+            {dshInstructions ? (
+              <ContextFixed
+                source="instructions"
+                label={t("main.settingsUi.ctxInstructions")}
+                why={t("main.settingsUi.ctxInstructionsDsh")}
+                chars={sizes?.instructions}
+              />
+            ) : (
+              <ContextBox
+                source="instructions"
+                flag={OFF_KEY.instructions}
+                label={t("main.settingsUi.ctxInstructions")}
+                chars={sizes?.instructions}
+              />
+            )}
             <ContextBox
               source="skills"
               flag={OFF_KEY.skills}
@@ -920,11 +990,12 @@ export function ContextSwitch({ ctx }: { ctx: ClientCtx }) {
             <ContextFixed
               source="claudemd"
               label={t("main.settingsUi.ctxClaudeMd")}
-              why={claudeMdWhy(claudeMd)}
+              why={claudeMdWhy(mdReason)}
               chars={claudeMd?.chars}
               files={claudeMd?.files}
-              checked={claudeMd?.disabledBy === undefined}
+              checked={mdReason !== "config" && claudeMd?.disabledBy === undefined}
             />
+            <ContextMemoryRow state={memory} onChange={setMemoryOn} />
             <div style={{ color: T.muted, fontSize: 12, marginTop: 6 }}>
               {t("main.settingsUi.whatDshWritesNeverSends")}
             </div>
@@ -1036,6 +1107,8 @@ export function ContextRowMask({
   const mine = sessionId !== undefined && isClaudeSession(ctx, sessionId);
   const provider = sessionId === undefined ? undefined : claudeProviderOf(ctx, sessionId);
   const promptSent = useSystemPromptSent(provider, sessionId, order.length > 0);
+  const claudeMd = useClaudeMd(ctx, sessionId, mine);
+  const dshInstructions = claudeMd?.instructionFiles === "dsh";
   // The node map is a new object on every streamed chunk, and the walk below visits every row in
   // the conversation, so keying the memo on the map made a long turn quadratic in the length of
   // the transcript. What decides a row's masking is its source kind, fixed when the row is made,
@@ -1051,8 +1124,12 @@ export function ContextRowMask({
       [OFF_KEY.instructions]: instructionsOff,
       [OFF_KEY.skills]: skillsOff,
     });
+    // The adapter forwards dsh's instruction block in the dsh instruction mode whatever the
+    // switches say (`instructionDropsFor` in `src/adapter/instruction-files.ts`), so its row is a
+    // true receipt even while the box reads clear.
+    if (dshInstructions) drops.delete("instructions");
     return maskedRows(order, (key) => current.get(key), drops, promptSent);
-  }, [mine, order, haveNodes, on, instructionsOff, skillsOff, promptSent]);
+  }, [mine, order, haveNodes, on, instructionsOff, skillsOff, promptSent, dshInstructions]);
   useEffect(() => {
     const existing = document.getElementById(ROW_MASK_STYLE_ID);
     const el = existing instanceof HTMLStyleElement ? existing : document.createElement("style");
