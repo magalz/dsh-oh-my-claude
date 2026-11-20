@@ -19,6 +19,16 @@ export declare const engineSkipKey: (option: EngineOption, preset: string) => st
  * mode however the list is written.
  */
 export declare function matchesEnginePreset(entries: readonly string[], preset: string | null | undefined): boolean;
+/**
+ * `rows` with `listed: true` added to every row whose id the config's list names, matched the way
+ * engine mode matches a preset: an exact id or a trailing-star prefix. Every other row comes back
+ * untouched, with no `listed` key, so a card reads the key's presence and never a false value.
+ */
+export declare function markListed<T extends {
+    id: string;
+}>(rows: readonly T[], listed: readonly string[]): (T & {
+    listed?: true;
+})[];
 /** The config keys engine mode sets, in the order Settings lists them. */
 export declare const ENGINE_OPTIONS: readonly ["systemPrompt", "builtinTools", "toolLoading", "followToolSet", "verbatimPrompts", "isolate", "thinkingDisplay"];
 /** One of the config keys engine mode sets. */
