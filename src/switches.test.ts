@@ -193,6 +193,17 @@ for (const days of [0, -5, 2.5, "30", null]) {
     { files: 2, chars: 900, disabledBy: "user", memoryIndex: true },
     "the memory index is reported on a box too",
   );
+  assert.deepEqual(withMountConfig(state, { systemPrompt: "dsh" }), {
+    files: 2,
+    chars: 900,
+    disabledBy: "user",
+    systemPrompt: "dsh",
+  });
+  assert.deepEqual(withMountConfig(state, { systemPrompt: "claude" }), state);
+  assert.deepEqual(
+    withMountConfig(state, { instructionFiles: "dsh", systemPrompt: "dsh" }),
+    { files: 2, chars: 900, disabledBy: "user", instructionFiles: "dsh", systemPrompt: "dsh" },
+  );
   assert.deepEqual(withMountConfig({ files: 0, chars: 0 }, { instructionFiles: "dsh" }), {
     files: 0,
     chars: 0,

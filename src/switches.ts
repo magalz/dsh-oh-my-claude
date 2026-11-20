@@ -62,6 +62,9 @@ export interface ClaudeMdState {
    *  `instructionFiles: dsh`, a local spawn and the default prompt mode. Absent otherwise; the
    *  per-machine `memoryIndexOn` hint is not a config fact. */
   memoryIndex?: true;
+  /** The mount's `systemPrompt: "dsh"` config, so a card knows the plugin has no room to append
+   *  the memory index. Absent for the default `claude` prompt. */
+  systemPrompt?: "dsh";
 }
 
 /**
@@ -102,7 +105,12 @@ export function claudeMdDisabledBy(
  */
 export function withMountConfig(
   state: ClaudeMdState,
-  box: { instructionFiles?: "claude" | "dsh"; memoryIndex?: boolean; sshHost?: string },
+  box: {
+    instructionFiles?: "claude" | "dsh";
+    memoryIndex?: boolean;
+    systemPrompt?: "claude" | "dsh";
+    sshHost?: string;
+  },
 ): ClaudeMdState {
   const out = { ...state };
   if (box.instructionFiles === "dsh" && !box.sshHost) out.instructionFiles = "dsh";

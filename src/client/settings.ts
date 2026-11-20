@@ -106,12 +106,24 @@ export function claudeMdReason(
   return scope === undefined ? "env" : scope;
 }
 
-/** The memory-index row's three states: fixed on because Claude Code loads the index itself, fixed
- *  on because the plugin's config appends it, or a switch-backed box. */
+/** Characters the dsh context switch can keep out of a turn: both switchable blocks when it can
+ *  drop them, and only the skill catalog in the dsh instruction mode, where the adapter forwards
+ *  the instructions block whatever the switch says. Undefined when neither countable block was
+ *  measured, so the card shows no saving rather than a zero it cannot stand behind. */
+export function savableChars(
+  _sizes: { instructions?: number; skills?: number } | null | undefined,
+  _dshInstructions: boolean,
+): number | undefined {
+  return 0;
+}
+
+/** The memory-index row's states: fixed on because Claude Code loads the index itself, fixed off
+ *  because nothing does, fixed on because the plugin's config appends it, fixed off because dsh's
+ *  own system prompt is sent, or a switch-backed box. */
 export interface MemoryRowState {
   checked: boolean;
   locked: boolean;
-  why: "native" | "config" | "switch";
+  why: "native" | "config" | "switch" | "off" | "dshPrompt";
 }
 
 /** What the memory-index row shows for `state` and this machine's `memoryIndexOn` hint. The hint

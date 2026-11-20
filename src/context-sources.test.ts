@@ -5,6 +5,7 @@ import {
   contextDrops,
   CONTEXT_SOURCES,
   maskedRows,
+  MEMORY_INDEX_ON_KEY,
   sourceBlockOf,
   TOGGLEABLE,
 } from "./context-sources.js";
@@ -42,7 +43,13 @@ assert.equal(
   contextDrops({ dshContextOn: true, dshContextRuntimeOff: true }).has("runtime"),
   false,
 );
-const HINT_KEYS = ["dshContextOn", "dshContextInstructionsOff", "dshContextSkillsOff"];
+assert.equal(MEMORY_INDEX_ON_KEY, "memoryIndexOn", "the key the memory-index box writes");
+const HINT_KEYS = [
+  "dshContextOn",
+  "dshContextInstructionsOff",
+  "dshContextSkillsOff",
+  MEMORY_INDEX_ON_KEY,
+];
 for (const k of HINT_KEYS) {
   assert.equal(/^[a-zA-Z][a-zA-Z0-9]{0,40}$/.test(k), true);
 }

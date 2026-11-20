@@ -6,6 +6,7 @@ import {
   claudeMdReason,
   memoryRowState,
   overrideNote,
+  savableChars,
   withListedPresets,
   type SettingsScopeInfo,
 } from "./settings.js";
@@ -106,6 +107,37 @@ const scope = (name: SettingsScopeInfo["scope"], text: string): SettingsScopeInf
     locked: false,
     why: "switch",
   });
+}
+
+// The savings line counts only what the switch can withhold: in the dsh instruction mode the
+// instructions block is always forwarded, so only the skill catalog is counted there.
+{
+  assert.equal(savableChars({ instructions: 400, skills: 120 }, false), 520);
+  assert.equal(savableChars({ instructions: 400, skills: 120 }, true), 120);
+  assert.equal(savableChars({ skills: 120 }, true), 120);
+  assert.equal(savableChars({ instructions: 400 }, false), 400);
+  assert.equal(savableChars({ instructions: 400 }, true), undefined);
+  assert.equal(savableChars({}, false), undefined);
+  assert.equal(savableChars(null, false), undefined);
+}
+
+// Outside the dsh instruction mode a settings scope or dsh's environment can switch Claude Code's
+// own loading off; then nothing loads the index, and the plugin appends it only in that mode.
+{
+  const off = { checked: false, locked: true, why: "off" };
+  assert.deepEqual(memoryRowState({ files: 2, chars: 30, disabledBy: "env" }, false), off);
+  assert.deepEqual(memoryRowState({ files: 2, chars: 30, disabledBy: "env" }, true), off);
+  assert.deepEqual(memoryRowState({ files: 2, chars: 30, disabledBy: "project" }, true), off);
+}
+
+// The dsh system prompt leaves the plugin no place to append the index, so the row says that even
+// when the config or this machine asks for it.
+{
+  const dshPrompt = { checked: false, locked: true, why: "dshPrompt" };
+  const state = { files: 0, chars: 0, instructionFiles: "dsh", systemPrompt: "dsh" } as const;
+  assert.deepEqual(memoryRowState(state, false), dshPrompt);
+  assert.deepEqual(memoryRowState(state, true), dshPrompt);
+  assert.deepEqual(memoryRowState({ ...state, memoryIndex: true }, true), dshPrompt);
 }
 
 // The engine card counts a listed preset as ticked without a tick in the store: the listed ids come
