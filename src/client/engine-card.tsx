@@ -13,7 +13,7 @@ import {
   type ClientCtx,
 } from "./shared.js";
 import { HINTS_EVENT, loadHints, useHintFlag } from "./hints.js";
-import { withListedPresets } from "./settings.js";
+import { DEFAULT_PROVIDER_ID, withListedPresets } from "./settings.js";
 import { Switch } from "./switch.js";
 import {
   ENGINE_ON_KEY,
@@ -171,19 +171,22 @@ function useTickedPresets(): Set<string> {
  * read failed, or this dsh has no preset service) show a one-line note. A preset the mount's
  * `enginePresets` config lists comes back marked: it counts as a mode and its box is fixed on, and
  * one line under the description names it even while the master switch is off, since those sessions
- * run in engine mode regardless.
+ * run in engine mode regardless. With the switch off the listed presets' option boxes render under
+ * that line, because the server applies those skips either way.
  */
 export function EngineModeCard({ ctx }: { ctx: ClientCtx }) {
   useLocale();
   const [presets, setPresets] = useState<PresetRow[] | undefined>();
   const [reads, setReads] = useState(0);
-  // The status route marks a preset only when the request names the session's mount, so the
-  // provider travels with the read, the way the CLAUDE.md row asks for it.
+  // The status route marks a preset only when the request names the mount whose config lists it.
+  // The open session names it when it is Claude; otherwise ask the default mount, whose config is
+  // what a fresh session gets.
   const id = openSessionId(ctx);
-  const provider = id === undefined ? "" : (claudeProviderOf(ctx, id) ?? "");
+  const provider =
+    (id === undefined ? undefined : claudeProviderOf(ctx, id)) ?? DEFAULT_PROVIDER_ID;
   useEffect(() => {
     let live = true;
-    const onBox = provider ? `?provider=${encodeURIComponent(provider)}` : "";
+    const onBox = `?provider=${encodeURIComponent(provider)}`;
     fetch(`${ROUTE}/presets${onBox}`)
       .then((r) => readJson<{ presets?: PresetRow[] }>(r))
       .then((r) => live && setPresets(r.presets ?? []))
@@ -198,9 +201,8 @@ export function EngineModeCard({ ctx }: { ctx: ClientCtx }) {
   const tickedNames = (presets ?? [])
     .filter((p) => allTicked.includes(p.id))
     .map((p) => builtInName(p.id) ?? p.name);
-  const listedNames = (presets ?? [])
-    .filter((p) => p.listed === true)
-    .map((p) => builtInName(p.id) ?? p.name);
+  const listedPresets = (presets ?? []).filter((p) => p.listed === true);
+  const listedNames = listedPresets.map((p) => builtInName(p.id) ?? p.name);
   return (
     <>
       <div
@@ -227,6 +229,23 @@ export function EngineModeCard({ ctx }: { ctx: ClientCtx }) {
         </div>
         <Switch on={on} onChange={setOn} label={t("main.settingsUi.engineTitle")} />
       </div>
+      {!on && listedPresets.length > 0 && (
+        <div
+          data-omc-engine-listed-modes=""
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            margin: "0 0 12px",
+            padding: "0 0 0 16px",
+            fontSize: 13,
+          }}
+        >
+          {listedPresets.map((p) => (
+            <PresetBox key={p.id} preset={p} />
+          ))}
+        </div>
+      )}
       {on && (
         <details
           data-omc-engine-modes=""

@@ -24,7 +24,7 @@ export const MASTER_KEY = "dshContextOn";
  *  `memoryIndex` is the base; this adds to it on one machine and never takes a config `true`
  *  away. Kept with the other hint keys so the browser half can read it without the node-side
  *  reader in `src/adapter/memory-index.ts`, which re-exports it for the server. */
-export const MEMORY_INDEX_ON_KEY = "memoryIndexOn-stub";
+export const MEMORY_INDEX_ON_KEY = "memoryIndexOn";
 
 /** Which of the toggleable context sources are withheld by the given hint map. */
 export function contextDrops(hints: Record<string, boolean | number>): Set<ContextSource> {

@@ -20,6 +20,16 @@ import { buildReport, type PrivateValues, type ReportInput } from "../report.js"
 import { repairsSummary } from "../session-heal.js";
 import { readSshToken, THIS_BOX } from "../ssh-login.js";
 import { STATE_DIR, loadSessionRepairs } from "../state.js";
+import { withMountConfig } from "../switches.js";
+
+/** The `/system-prompt` answer: whose system prompt the session's turns send, and whether the
+ *  mount forwards dsh's instruction block. The row mask reads both from this one cached answer, so
+ *  it never walks the instruction tree itself; `withMountConfig` decides the mode, the same rule
+ *  the CLAUDE.md route uses. */
+function promptAnswer(box: MountBox, mode: string): { mode: string; instructionFiles?: "dsh" } {
+  const { instructionFiles } = withMountConfig({ files: 0, chars: 0 }, box);
+  return instructionFiles === undefined ? { mode } : { mode, instructionFiles };
+}
 
 /** The status group of the session routes, built once per registration. Returns `UNHANDLED` when no
  *  block matched, so the dispatch tries the next group; any other return means a block answered. */
@@ -131,15 +141,17 @@ export function statusRoutes(c: RouteCtx): RouteHandler {
     // session (`?session=`) in a mode ticked for engine mode or listed in the mount's
     // `enginePresets`, by that. The listed presets come from the mount the request names, which
     // registered them as it was constructed (engine-mode.ts), so this answer and the turn's overlay
-    // read one rule. No CLI is asked.
+    // read one rule. The same answer carries the mount's dsh instruction mode, which the mask needs
+    // to keep dsh's instruction row when the adapter forwards it. No CLI is asked.
     if (req.method === "GET" && url.pathname === `${ROUTE_PREFIX}/system-prompt`) {
-      const own = boxOf(url).systemPrompt ?? "claude";
+      const box = boxOf(url);
+      const own = box.systemPrompt ?? "claude";
       const session = url.searchParams.get("session");
-      if (own === "dsh" || !session) return json(res, 200, { mode: own });
+      if (own === "dsh" || !session) return json(res, 200, promptAnswer(box, own));
       const hints = await readHints(join(STATE_DIR, "hints.json")).catch(() => ({}));
       const listed = registeredEnginePresets(url.searchParams.get("provider") ?? DEFAULT_PROVIDER);
       const sent = engineSendsDshPrompt(listed, hints, presetOfSession(c.ctx, session));
-      return json(res, 200, { mode: sent ? "dsh" : own });
+      return json(res, 200, promptAnswer(box, sent ? "dsh" : own));
     }
     if (req.method === "GET" && url.pathname === `${ROUTE_PREFIX}/models`) {
       // `?all=1` is the Settings card's read: every mount's rows with their hide state, not the cut.

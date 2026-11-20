@@ -376,6 +376,10 @@ export const en = {
     "On in the plugin's config: the plugin appends it when a session's Claude process starts, since Claude Code no longer loads it.",
   "main.settingsUi.ctxMemoryIndexSwitch":
     "Claude Code no longer loads it in this mode. Tick this and the plugin appends it when a session's Claude process starts.",
+  "main.settingsUi.ctxMemoryIndexOff":
+    "Not loaded: CLAUDE_CODE_DISABLE_CLAUDE_MDS is set, so Claude Code loads no memory index, and the plugin appends it only with instructionFiles: dsh.",
+  "main.settingsUi.ctxMemoryIndexDshPrompt":
+    "Not appended: this mount sends dsh's own system prompt, so the plugin leaves the memory index out.",
   "main.settingsUi.whatDshWritesNeverSends": "What dsh writes down but never sends",
   "main.settingsUi.ctxSystem": "dsh system prompt",
   "main.settingsUi.ctxSystemWhy":
@@ -1008,6 +1012,10 @@ export const zh = {
     "已在插件配置中开启：会话的 Claude 进程启动时由插件追加，因为 Claude Code 不再加载它。",
   "main.settingsUi.ctxMemoryIndexSwitch":
     "此模式下 Claude Code 不再加载它。勾选后，会话的 Claude 进程启动时由插件追加。",
+  "main.settingsUi.ctxMemoryIndexOff":
+    "未加载：已设置 CLAUDE_CODE_DISABLE_CLAUDE_MDS，因此 Claude Code 不加载记忆索引，而插件只在 instructionFiles 设为 dsh 时追加它。",
+  "main.settingsUi.ctxMemoryIndexDshPrompt":
+    "未追加：此挂载发送 dsh 自己的系统提示词，因此插件不附加记忆索引。",
   "main.settingsUi.whatDshWritesNeverSends": "dsh 记录但从不发送的内容",
   "main.settingsUi.ctxSystem": "dsh 系统提示",
   "main.settingsUi.ctxSystemWhy": "dsh 会把它记录在会话上，本插件从未把它传给 Claude Code。",

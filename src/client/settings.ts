@@ -88,6 +88,10 @@ export function overrideNote(scopes: readonly SettingsScopeInfo[], scope: Settin
     : t("settings.overridden", { clauses: clauses.join(t("settings.clauseSep")) });
 }
 
+/** The provider id the server mounts by default (`DEFAULT_PROVIDER` in `src/sessions.ts`). A card
+ *  with no open Claude session names it so the routes still read that mount's config facts. */
+export const DEFAULT_PROVIDER_ID = "claude-code";
+
 /** Why Claude Code's own CLAUDE.md files reach a session or not: the plugin's config in the dsh
  *  instruction mode, `"env"` for dsh's own environment, a settings scope that sets the disable
  *  variable, or undefined when the files load. */
@@ -111,10 +115,13 @@ export function claudeMdReason(
  *  the instructions block whatever the switch says. Undefined when neither countable block was
  *  measured, so the card shows no saving rather than a zero it cannot stand behind. */
 export function savableChars(
-  _sizes: { instructions?: number; skills?: number } | null | undefined,
-  _dshInstructions: boolean,
+  sizes: { instructions?: number; skills?: number } | null | undefined,
+  dshInstructions: boolean,
 ): number | undefined {
-  return 0;
+  const instructions = dshInstructions ? undefined : sizes?.instructions;
+  const skills = sizes?.skills;
+  if (instructions === undefined && skills === undefined) return undefined;
+  return (instructions ?? 0) + (skills ?? 0);
 }
 
 /** The memory-index row's states: fixed on because Claude Code loads the index itself, fixed off
@@ -126,14 +133,21 @@ export interface MemoryRowState {
   why: "native" | "config" | "switch" | "off" | "dshPrompt";
 }
 
-/** What the memory-index row shows for `state` and this machine's `memoryIndexOn` hint. The hint
- *  only moves the box in the dsh instruction mode without the config's `memoryIndex`: there Claude
- *  Code no longer loads the index and the plugin can append it. */
+/** What the memory-index row shows for `state` and this machine's `memoryIndexOn` hint. Outside
+ *  the dsh instruction mode Claude Code loads the index unless a settings scope or dsh's own
+ *  environment switched its loading off, in which case nothing loads it: the plugin appends it only
+ *  in that mode. In the mode, dsh's own system prompt leaves the plugin no room to append it; the
+ *  config's `memoryIndex` and then this machine's hint decide the rest. */
 export function memoryRowState(
   state: ClaudeMdState | null | undefined,
   hintOn: boolean,
 ): MemoryRowState {
-  if (state?.instructionFiles !== "dsh") return { checked: true, locked: true, why: "native" };
+  if (state?.instructionFiles !== "dsh") {
+    return state?.disabledBy === undefined
+      ? { checked: true, locked: true, why: "native" }
+      : { checked: false, locked: true, why: "off" };
+  }
+  if (state.systemPrompt === "dsh") return { checked: false, locked: true, why: "dshPrompt" };
   if (state.memoryIndex === true) return { checked: true, locked: true, why: "config" };
   return { checked: hintOn, locked: false, why: "switch" };
 }
