@@ -58,8 +58,9 @@ export interface ClaudeMdState {
    *  Claude Code loads none of its own. Absent for `claude`, for an unconfigured mount and for a
    *  box, whose shell ignores the mode. */
   instructionFiles?: "dsh";
-  /** The mount's `memoryIndex` config is on, so the plugin appends the workspace's auto-memory
-   *  index. Absent otherwise; the per-machine `memoryIndexOn` hint is not a config fact. */
+  /** The mount's `memoryIndex` config is on. Whether the index is appended still depends on
+   *  `instructionFiles: dsh`, a local spawn and the default prompt mode. Absent otherwise; the
+   *  per-machine `memoryIndexOn` hint is not a config fact. */
   memoryIndex?: true;
 }
 

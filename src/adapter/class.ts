@@ -1760,6 +1760,11 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     // One small file read per turn, next to a process spawn. No cache: the Settings card writes
     // this file, and a stale set is a switch that visibly does nothing.
     const hints = await readHints(join(this.stateDir, "hints.json"));
+    // A switch that belongs to the machine lives in the default instance's hints file, which the
+    // Settings route writes, so a second instance (an SSH box, a second login) reads that file
+    // for it; `readHints` caches by mtime.
+    const boxHints =
+      this.stateDir === STATE_DIR ? hints : await readHints(join(STATE_DIR, "hints.json"));
     // Asked of the base URL the CLI will really use, which settings.json can set over the head of
     // dsh's own environment: with a router there and a forwarding proxy exported, the exported
     // one's answer would tell the CLI its router is Anthropic.
@@ -1818,7 +1823,7 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     let memoryText: string | undefined;
     if (
       usesMemoryIndex(
-        { memoryIndex: memoryIndexAsked(cfg, hints) },
+        { memoryIndex: memoryIndexAsked(cfg, boxHints) },
         dshInstructions,
         engineConfig.isolate,
         dshSystem,
@@ -1982,11 +1987,8 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     else if (this.config.sshHost && far && !far.ownWindow) sized = await this.rowWindow(model);
     if (sized !== undefined) spec.window = sized;
     // Keeper or child joins the spec the same way: a flip of the Settings switch replaces each
-    // running process on its session's next turn, never during one. The switch lives in the
-    // default instance's hints file, which the Settings route writes, so a second instance (an SSH
-    // box, a second login) reads that file too; `readHints` caches by mtime.
-    const boxHints =
-      this.stateDir === STATE_DIR ? hints : await readHints(join(STATE_DIR, "hints.json"));
+    // running process on its session's next turn, never during one. The switch is the machine's,
+    // so it is read from `boxHints` (above).
     const spawnMode = spawnModeFor(
       this.spawnSetting,
       boxHints[KEEPER_OFF] === true,
