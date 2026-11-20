@@ -47,7 +47,12 @@ import {
 } from "./instruction-files.js";
 import { ISOLATED_ENV, engineConfigFor, engineDigest } from "./isolate.js";
 import { engineOverlay, presetOfSession, registerEnginePresets } from "./engine-mode.js";
-import { memoryIndexBlock, readMemoryIndex, usesMemoryIndex } from "./memory-index.js";
+import {
+  memoryIndexAsked,
+  memoryIndexBlock,
+  readMemoryIndex,
+  usesMemoryIndex,
+} from "./memory-index.js";
 import { guidancePathFor, readGuidanceFile, systemPromptDigest } from "./preset-guidance.js";
 import {
   type ClaudeEvent,
@@ -1755,6 +1760,11 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     // One small file read per turn, next to a process spawn. No cache: the Settings card writes
     // this file, and a stale set is a switch that visibly does nothing.
     const hints = await readHints(join(this.stateDir, "hints.json"));
+    // A switch that belongs to the machine lives in the default instance's hints file, which the
+    // Settings route writes, so a second instance (an SSH box, a second login) reads that file
+    // for it; `readHints` caches by mtime.
+    const boxHints =
+      this.stateDir === STATE_DIR ? hints : await readHints(join(STATE_DIR, "hints.json"));
     // Asked of the base URL the CLI will really use, which settings.json can set over the head of
     // dsh's own environment: with a router there and a forwarding proxy exported, the exported
     // one's answer would tell the CLI its router is Anthropic.
@@ -1811,7 +1821,14 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     // repository's project dir under claudeHome; a custom `autoMemoryDirectory` is not followed
     // (docs/configuration.md). Every problem means no block, never a failed turn.
     let memoryText: string | undefined;
-    if (usesMemoryIndex(cfg, dshInstructions, engineConfig.isolate, dshSystem)) {
+    if (
+      usesMemoryIndex(
+        { memoryIndex: memoryIndexAsked(cfg, boxHints) },
+        dshInstructions,
+        engineConfig.isolate,
+        dshSystem,
+      )
+    ) {
       try {
         const root = await repoRoot({}, cwd);
         memoryText = await this.memoryIndexAt(
@@ -1970,11 +1987,8 @@ export class ClaudeCodeAdapter extends LlmAdapter {
     else if (this.config.sshHost && far && !far.ownWindow) sized = await this.rowWindow(model);
     if (sized !== undefined) spec.window = sized;
     // Keeper or child joins the spec the same way: a flip of the Settings switch replaces each
-    // running process on its session's next turn, never during one. The switch lives in the
-    // default instance's hints file, which the Settings route writes, so a second instance (an SSH
-    // box, a second login) reads that file too; `readHints` caches by mtime.
-    const boxHints =
-      this.stateDir === STATE_DIR ? hints : await readHints(join(STATE_DIR, "hints.json"));
+    // running process on its session's next turn, never during one. The switch is the machine's,
+    // so it is read from `boxHints` (above).
     const spawnMode = spawnModeFor(
       this.spawnSetting,
       boxHints[KEEPER_OFF] === true,

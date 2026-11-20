@@ -39,6 +39,18 @@ export function matchesEnginePreset(
   );
 }
 
+/**
+ * `rows` with `listed: true` added to every row whose id the config's list names, matched the way
+ * engine mode matches a preset: an exact id or a trailing-star prefix. Every other row comes back
+ * untouched, with no `listed` key, so a card reads the key's presence and never a false value.
+ */
+export function markListed<T extends { id: string }>(
+  rows: readonly T[],
+  listed: readonly string[],
+): (T & { listed?: true })[] {
+  return rows.map((row) => (matchesEnginePreset(listed, row.id) ? { ...row, listed: true } : row));
+}
+
 /** The config keys engine mode sets, in the order Settings lists them. */
 export const ENGINE_OPTIONS = [
   "systemPrompt",

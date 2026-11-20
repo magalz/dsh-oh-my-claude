@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { tempDir } from "../test-tmp.js";
 import {
   MEMORY_INDEX_MAX_BYTES,
+  MEMORY_INDEX_ON_KEY,
+  memoryIndexAsked,
   memoryIndexBlock,
   readMemoryIndex,
   usesMemoryIndex,
@@ -23,6 +25,30 @@ const dir = tempDir("omc-memory-index-");
   assert.equal(usesMemoryIndex(on, false, false, undefined), false);
   assert.equal(usesMemoryIndex(on, true, true, undefined), false);
   assert.equal(usesMemoryIndex(on, true, false, "dsh's prompt"), false);
+}
+
+// The config key and the per-machine switch: the switch only adds, so a config `true` stays on
+// whatever the hints hold, and with the key off only an exact `true` turns it on.
+{
+  assert.equal(MEMORY_INDEX_ON_KEY, "memoryIndexOn", "the key the Settings box writes");
+  assert.equal(memoryIndexAsked({ memoryIndex: true }, {}), true, "the config asks for it");
+  assert.equal(
+    memoryIndexAsked({ memoryIndex: false }, { [MEMORY_INDEX_ON_KEY]: true }),
+    true,
+    "the hint turns it on for this machine",
+  );
+  assert.equal(memoryIndexAsked({ memoryIndex: false }, {}), false, "off here and nowhere else");
+  assert.equal(
+    memoryIndexAsked({ memoryIndex: false }, { [MEMORY_INDEX_ON_KEY]: 1 }),
+    false,
+    "only an exact true is a tick",
+  );
+  for (const hint of [false, 0, 1])
+    assert.equal(
+      memoryIndexAsked({ memoryIndex: true }, { [MEMORY_INDEX_ON_KEY]: hint, engineOn: true }),
+      true,
+      `the config true is never switched off (hint ${hint})`,
+    );
 }
 
 // The block is a heading, one sentence naming the index file, then the text itself.

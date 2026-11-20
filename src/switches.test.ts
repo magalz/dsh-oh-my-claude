@@ -1,6 +1,11 @@
 // Offline self-check: bun src/switches.test.ts. No CLI, no network.
 import assert from "node:assert/strict";
-import { claudeMdDisabledBy, DEFAULT_RETENTION_DAYS, featureSwitches } from "./switches.js";
+import {
+  claudeMdDisabledBy,
+  DEFAULT_RETENTION_DAYS,
+  featureSwitches,
+  withMountConfig,
+} from "./switches.js";
 
 const scopes = (files: Record<string, unknown>) =>
   Object.entries(files).map(([scope, value]) => ({ scope, text: JSON.stringify(value) }));
@@ -156,6 +161,43 @@ for (const days of [0, -5, 2.5, "30", null]) {
     undefined,
     "the first scope that names the key decides; the lower file changes nothing",
   );
+}
+
+// The plugin's config as a free box shows it: `instructionFiles: "dsh"` is reported only for a
+// local mount whose config asks for it, `memoryIndex: true` only for a config true, and the count,
+// the total and the reason already worked out are left exactly as they came.
+{
+  const state = { files: 2, chars: 900, disabledBy: "user" };
+  assert.deepEqual(withMountConfig(state, { instructionFiles: "dsh" }), {
+    files: 2,
+    chars: 900,
+    disabledBy: "user",
+    instructionFiles: "dsh",
+  });
+  assert.deepEqual(withMountConfig(state, { instructionFiles: "claude" }), state);
+  assert.deepEqual(withMountConfig(state, {}), state);
+  assert.deepEqual(
+    withMountConfig(state, { instructionFiles: "dsh", sshHost: "box" }),
+    state,
+    "a box's shell ignores the dsh instruction mode",
+  );
+  assert.deepEqual(withMountConfig(state, { memoryIndex: true }), {
+    files: 2,
+    chars: 900,
+    disabledBy: "user",
+    memoryIndex: true,
+  });
+  assert.deepEqual(withMountConfig(state, { memoryIndex: false }), state);
+  assert.deepEqual(
+    withMountConfig(state, { instructionFiles: "dsh", memoryIndex: true, sshHost: "box" }),
+    { files: 2, chars: 900, disabledBy: "user", memoryIndex: true },
+    "the memory index is reported on a box too",
+  );
+  assert.deepEqual(withMountConfig({ files: 0, chars: 0 }, { instructionFiles: "dsh" }), {
+    files: 0,
+    chars: 0,
+    instructionFiles: "dsh",
+  });
 }
 
 console.log("switches ok");

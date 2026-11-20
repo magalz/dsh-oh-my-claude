@@ -14,6 +14,7 @@ import {
   enginePresets,
   engineSendsDshPrompt,
   engineSkipKey,
+  markListed,
   matchesEnginePreset,
   presetOfSession,
   registeredEnginePresets,
@@ -136,6 +137,24 @@ assert.deepEqual(
     "the exact text, star and all",
   );
   assert.equal(engineOverlay(literal, {}, "crew-*x").systemPrompt, "dsh");
+}
+
+// The card's list marks the rows the mount's config names: an exact id or a trailing-star prefix,
+// and every other row comes back exactly as it was, with no `listed` key to read as false.
+{
+  const rows = [
+    { id: "crew-worker", name: "Crew worker", kind: "worker" },
+    { id: "engine", name: "Engine" },
+  ];
+  assert.deepEqual(markListed(rows, ["crew-*"]), [
+    { id: "crew-worker", name: "Crew worker", kind: "worker", listed: true },
+    { id: "engine", name: "Engine" },
+  ]);
+  assert.deepEqual(markListed(rows, ["engine"]), [
+    { id: "crew-worker", name: "Crew worker", kind: "worker" },
+    { id: "engine", name: "Engine", listed: true },
+  ]);
+  assert.deepEqual(markListed(rows, []), rows, "nothing listed leaves every row as it was");
 }
 
 // The per-option opt-outs are still the hints store's, keyed by preset id, and they apply to a
